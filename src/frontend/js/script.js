@@ -8,18 +8,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const SESSION_ID = "sess_" + Math.random().toString(36).substring(2, 15);
     const fileStreams = [];
 
-    function formatBytes(bytes) {
-        if (bytes === 0) return '0 Б';
-        const k = 1024;
-        const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
-        const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k));
-        return parseFloat((Math.abs(bytes) / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    function formatTime(seconds) {
+        if (!seconds || seconds <= 0) return '0 сек';
+        if (seconds < 60) return seconds.toFixed(1) + ' сек';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins} мин ${secs} сек`;
+    }
+
+    function getAudioDuration(file) {
+        return new Promise((resolve) => {
+            const audio = new Audio();
+            const url = URL.createObjectURL(file);
+            audio.preload = "metadata"; 
+            audio.src = url;
+
+            audio.onloadedmetadata = () => {
+                URL.revokeObjectURL(url);
+                resolve(audio.duration);
+            };
+
+            audio.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve(null);
+            };
+        });
     }
 
     audioInput.addEventListener('change', async () => {
         const files = Array.from(audioInput.files);
         for (const file of files) {
+            const duration = await getAudioDuration(file);
+            
+            if (duration === null) {
+                alert(`Файл "${file.name}" не поддерживается или поврежден.`);
+                continue;
+            }
+
             const streamer = new AudioStreamer(WS_URL, SESSION_ID, file);
+            streamer.originalDuration = duration;
+            
             fileStreams.push(streamer);
             streamer.onStatusChange = () => renderFileList();
             streamer.start(); 
@@ -45,29 +73,24 @@ document.addEventListener('DOMContentLoaded', () => {
             statusSpan.className = `status-badge badge-${streamer.status}`;
             statusSpan.textContent = getStatusText(streamer.status);
 
-            const sizeDiffSpan = document.createElement('span');
-            sizeDiffSpan.className = 'size-info';
+            const timeDiffSpan = document.createElement('span');
+            timeDiffSpan.className = 'size-info';
             
             if (streamer.status === 'finished') {
-                const diff = streamer.originalSize - streamer.processedSize;
-                const percent = ((Math.abs(diff) / streamer.originalSize) * 100).toFixed(1);
-                
-                if (diff > 0) {
-                    sizeDiffSpan.textContent = `Сэкономлено: ${formatBytes(diff)} (${percent}%)`;
-                    sizeDiffSpan.style.color = 'rgb(22, 101, 52)';
-                } else if (diff < 0) {
-                    sizeDiffSpan.textContent = `Размер вырос на: ${formatBytes(Math.abs(diff))}`;
-                    sizeDiffSpan.style.color = 'rgb(153, 27, 27)';
+                const diff = streamer.originalDuration - streamer.processedDuration;
+                if (diff > 0.5) {
+                    timeDiffSpan.textContent = `Сэкономлено времени: ${formatTime(diff)}`;
+                    timeDiffSpan.style.color = 'rgb(22, 101, 52)';
                 } else {
-                    sizeDiffSpan.textContent = `Размер не изменился`;
+                    timeDiffSpan.textContent = `Длительность: ${formatTime(streamer.processedDuration)}`;
                 }
             } else {
-                sizeDiffSpan.textContent = `Исходный: ${formatBytes(streamer.originalSize)}`;
+                timeDiffSpan.textContent = `Исходная длина: ${formatTime(streamer.originalDuration)}`;
             }
 
             infoDiv.appendChild(nameSpan);
             infoDiv.appendChild(statusSpan);
-            infoDiv.appendChild(sizeDiffSpan);
+            infoDiv.appendChild(timeDiffSpan);
 
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'file-actions';
@@ -75,17 +98,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const playBtn = document.createElement('button');
             playBtn.className = 'btn-play';
             playBtn.textContent = 'Слушать';
-            playBtn.onclick = () => streamer.attachToPlayer(audioPlayer);
+            playBtn.onclick = () => {
+                streamer.attachToPlayer(audioPlayer);
+                audioPlayer.playbackRate = parseFloat(playbackRateSelect.value);
+            };
 
             const downloadBtn = document.createElement('button');
-            downloadBtn.className = 'btn-download';
             downloadBtn.textContent = 'Скачать';
             downloadBtn.disabled = streamer.status !== 'finished';
             if (streamer.status === 'finished') {
                 downloadBtn.onclick = () => {
                     const a = document.createElement('a');
                     a.href = streamer.blobUrl;
-                    a.download = `ready_${streamer.file.name}`;
+                    a.download = `cut_${streamer.file.name}`;
                     a.click();
                 };
             }

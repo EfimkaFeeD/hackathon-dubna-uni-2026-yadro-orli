@@ -29,8 +29,8 @@ class AudioStreamer {
         this.blobUrl = null;
         this.onStatusChange = null;
 
-        this.originalSize = file.size; 
-        this.processedSize = 0;        
+        this.originalDuration = 0; 
+        this.processedDuration = 0;        
     }
 
     start() {
@@ -59,14 +59,12 @@ class AudioStreamer {
                     }
                 } catch (e) {}
             } else {
-                this.processedSize += event.data.byteLength;
                 this._handleIncomingChunk(event.data);
             }
         };
 
         this.socket.onclose = () => {
             this._finalize();
-            this._updateStatus('finished');
         };
 
         this.socket.onerror = () => {
@@ -105,7 +103,6 @@ class AudioStreamer {
     _reset() {
         this.collectedChunks = [];
         this.queue = [];
-        this.processedSize = 0;
     }
 
     _handleIncomingChunk(chunk) {
@@ -150,12 +147,30 @@ class AudioStreamer {
         }
     }
 
-    _finalize() {
-        if (this.collectedChunks.length === 0) return;
+    async _finalize() {
+        if (this.collectedChunks.length === 0) {
+            this._updateStatus('finished');
+            return;
+        }
         const mimeType = this.mimeMap[this.currentExt] || 'audio/wav';
         const blob = new Blob(this.collectedChunks, { type: mimeType });
-        if (this.blobUrl) URL.revokeObjectURL(this.blobUrl);
-        this.blobUrl = URL.createObjectURL(blob);
+        
+        const tempUrl = URL.createObjectURL(blob);
+        const tempAudio = new Audio();
+        tempAudio.src = tempUrl;
+
+        tempAudio.addEventListener('loadedmetadata', () => {
+            this.processedDuration = tempAudio.duration;
+            URL.revokeObjectURL(tempUrl);
+            this.blobUrl = URL.createObjectURL(blob);
+            this._updateStatus('finished');
+        });
+
+        tempAudio.addEventListener('error', () => {
+            URL.revokeObjectURL(tempUrl);
+            this.blobUrl = URL.createObjectURL(blob);
+            this._updateStatus('finished');
+        });
     }
 
     _updateStatus(newStatus) {
