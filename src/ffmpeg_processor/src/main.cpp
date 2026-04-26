@@ -1,7 +1,3 @@
-#include "audio_accumulator.hpp"
-#include "audio_resampler.hpp"
-#include "consts.h"
-
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/frame.h>
@@ -12,6 +8,11 @@ extern "C" {
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+
+#include "audio_accumulator.hpp"
+#include "audio_noise_level.hpp"
+#include "audio_resampler.hpp"
+#include "consts.h"
 
 static void
 fillSineWave(AVFrame* frame, double freq, double sampleRate, double timeOffset) {
@@ -29,7 +30,7 @@ int
 main() {
   constexpr int kInputSampleRate = 44100;
   constexpr int kInputFrameMs    = 10;
-  const int nb_samples           = kInputSampleRate * kInputFrameMs / 1000;
+  constexpr int nb_samples       = kInputSampleRate * kInputFrameMs / 1000;
   static_assert(nb_samples > 0);
 
   constexpr int kTotalFrames = kAccumulatorTargetSamples / kOutputSamples;
@@ -110,7 +111,12 @@ main() {
   }
   std::cout << "\n";
 
+  AudioNoiseLevel noiseLevel;
+  float noiseDb = noiseLevel.computeNoiseFloor(bigData, bigSamples);
+  std::cout << "  Noise floor : " << noiseDb << " dB\n";
+
   av_frame_free(&inputFrame);
+
   std::cout << "\nTest passed.\n";
   return 0;
 }
