@@ -3,13 +3,18 @@ set windows-powershell := true
 os_type  := os()
 is_win   := if os_type == "windows" { "true" } else { "false" }
 
+# Настройка команд
 mkdir_cmd := if is_win == "true" { "New-Item -ItemType Directory -Force" } else { "mkdir -p" }
-dirs      := if is_win == "true" { "data, storage/disk, shared_plugins" } else { "data storage/disk shared_plugins" }
+cp_env    := if is_win == "true" { "if (!(Test-Path .env)) { Copy-Item .env.example .env }" } else { "cp -n .env.example .env || true" }
+rm_rf     := if is_win == "true" { "Remove-Item -Recurse -Force" } else { "rm -rf" }
 
+# Кроссплатформенное скрытие вывода
 null_redir := if is_win == "true" { "| Out-Null" } else { "> /dev/null 2>&1" }
 
-cp_env   := if is_win == "true" { "if (!(Test-Path .env)) { Copy-Item .env.example .env }" } else { "cp -n .env.example .env || true" }
-rm_rf    := if is_win == "true" { "Remove-Item -Recurse -Force" } else { "rm -rf" }
+# Списки путей: в Windows нужны запятые, в Linux — пробелы
+dirs      := if is_win == "true" { "data, storage/disk, shared_plugins" } else { "data storage/disk shared_plugins" }
+rm_paths  := if is_win == "true" { "data/*, storage/disk/*, shared_plugins/*" } else { "data/* storage/disk/* shared_plugins/*" }
+
 
 default:
     @just --list
@@ -58,4 +63,5 @@ down:
 
 clean: down
     @echo "[INFO] Starting workspace cleanup..."
-    @{{ rm_rf }} {{ if is_win == "true" { "data/*, storage/disk/*
+    @{{ rm_rf }} {{ rm_paths }}
+    @echo "[DONE] Workspace is now clean."
