@@ -1,32 +1,49 @@
-mod config;
-mod errors;
-mod auth;
-mod db;
-mod storage;
-mod plugin;
-mod routes;
-
-use axum::{Router, routing::get, response::Html};
-use tokio::net::TcpListener;
-
-fn init_router() -> Router {
-    Router::new()
-        .route("/", get(hello_world))
-}
-
-async fn hello_world() -> Html<&'static str> {
-    Html("<h1>Hello, World!</h1>")
-}
+use axum::{
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
+use futures::{SinkExt, StreamExt};
+use std::net::SocketAddr;
+use tower_http::services::ServeDir;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
 async fn main() {
-    println!("Hello, world!");
-    let app = init_router();
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
-    let listener = TcpListener::bind("127.0.0.1:3000")
-        .await
-        .expect("Failed to bind");
+    let static_files = ServeDir::new("../../frontend").append_index_html_on_directories(true);
 
-    println!("Listening on: {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.expect("Failed to run server");
+    let app = Router::new()
+        .route("/ws", get(ws_handler))
+        .fallback_service(static_files);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    println!("🌐 http://{}", addr);
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(socket: WebSocket) {
+    let (mut tx, mut rx) = socket.split();
+
+    while let Some(Ok(msg)) = rx.next().await {
+        match msg {
+            Message::Text(t) if t.contains(r#""type":"init""#) => {
+                let _ = tx.send(Message::Text(r#"{"extension":".wav"}"#.into())).await;
+            }
+            Message::Binary(data) => {
+                let _ = tx.send(Message::Binary(data)).await;
+            }
+            _ => {}
+        }
+    }
 }
