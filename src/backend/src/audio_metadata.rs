@@ -29,7 +29,6 @@ impl Default for AudioMetadata {
 }
 
 pub fn get_audio_metadata(data: &[u8]) -> Result<AudioMetadata, String> {
-    // Копируем данные в Vec, чтобы решить проблему с lifetime
     let data_vec = data.to_vec();
     let cursor = Cursor::new(data_vec);
     let mss = MediaSourceStream::new(Box::new(cursor), Default::default());

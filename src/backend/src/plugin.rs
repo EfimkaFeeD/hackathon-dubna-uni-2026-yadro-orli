@@ -3,10 +3,8 @@ use std::ffi::c_void;
 use std::sync::OnceLock;
 use crate::models::{AudioSpec, ChunkType};
 
-// Глобальное хранилище для загруженной .so библиотеки
 static PLUGIN_LIB: OnceLock<Library> = OnceLock::new();
 
-// Инициализируется один раз при старте сервера
 pub fn init_plugin(plugin_path: &str) -> anyhow::Result<()> {
     unsafe {
         let lib = Library::new(plugin_path)?;
@@ -14,8 +12,6 @@ pub fn init_plugin(plugin_path: &str) -> anyhow::Result<()> {
     }
     Ok(())
 }
-
-// ---------------- C++ СТРУКТУРЫ ---------------- //
 
 #[repr(C)]
 pub struct CAudioSpec {
@@ -32,19 +28,16 @@ pub struct FfiPluginResult {
     pub chunk_type: u8,
 }
 
-// ---------------- ОПРЕДЕЛЕНИЯ ФУНКЦИЙ ---------------- //
 
 type CreateFn = unsafe extern "C" fn(spec: *const CAudioSpec, margin_db: f32, vad_mode: i32, noise_window_ms: i32) -> *mut c_void;
 type ProcessFn = unsafe extern "C" fn(handle: *mut c_void, packet_num: u32, buf: *const u8, len: usize) -> FfiPluginResult;
 type DestroyFn = unsafe extern "C" fn(handle: *mut c_void);
 
-// ---------------- ОБРАБОТЧИК (Один на каждый WebSocket) ---------------- //
 
 pub struct AudioProcessor {
     handle: *mut c_void,
 }
 
-// Разрешаем передачу между асинхронными задачами tokio
 unsafe impl Send for AudioProcessor {}
 
 impl AudioProcessor {
@@ -82,7 +75,6 @@ impl AudioProcessor {
     }
 }
 
-// Автоматически очищаем память в C++ при закрытии стрима
 impl Drop for AudioProcessor {
     fn drop(&mut self) {
         if let Some(lib) = PLUGIN_LIB.get() {

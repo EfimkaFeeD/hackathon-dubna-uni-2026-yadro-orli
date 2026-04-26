@@ -41,9 +41,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("База данных подключена и проинициализирована");
 
     if let Err(e) = init_plugin("/app/plugins/libpodcast_silence_remover.so") {
-        tracing::warn!("⚠️ Не удалось загрузить плагин: {}", e);
+        tracing::warn!("Не удалось загрузить плагин: {}", e);
     } else {
-        tracing::info!("✅ Аудио-плагин C++ успешно загружен!");
+        tracing::info!("Аудио-плагин C++ успешно загружен");
     }
 
     let storage = StorageService::new(&config.storage_url);

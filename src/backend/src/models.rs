@@ -44,7 +44,6 @@ pub enum ChunkType {
     Unknown = 255,
 }
 
-// Преобразование из C++ uint8_t в Rust Enum
 impl From<u8> for ChunkType {
     fn from(val: u8) -> Self {
         match val {
