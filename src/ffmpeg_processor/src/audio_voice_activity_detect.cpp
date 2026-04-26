@@ -1,10 +1,11 @@
 #include "audio_voice_activity_detect.hpp"
 
-#include <cstdint>
-#include <cstring>
+extern "C" {
 #include <fvad.h>
+}
+
+#include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 #include "consts.h"
 
@@ -18,36 +19,13 @@ AudioVoiceActivityDetect::~AudioVoiceActivityDetect() {
   }
 }
 
-std::vector<bool>
-AudioVoiceActivityDetect::detect(const int16_t* audio, size_t totalSamples, const std::vector<bool>& simpleMask) {
-  if ((audio == nullptr) || totalSamples == 0 || (totalSamples % kOutputSamples) != 0) {
-    return {};
+bool
+AudioVoiceActivityDetect::isVoice(const int16_t* frame, bool simpleVoice) const {
+  if ((frame == nullptr) || !simpleVoice) {
+    return false;
   }
-  if (simpleMask.size() != totalSamples / kOutputSamples) {
-    return {};
-  }
-
-  size_t numFrames = simpleMask.size();
-  std::vector<bool> finalMask;
-  finalMask.reserve(numFrames);
-
-  for (size_t f = 0; f < numFrames; ++f) {
-    bool simpleSaysVoice = simpleMask.at(f);
-    if (!simpleSaysVoice) {
-      finalMask.push_back(false);
-      continue;
-    }
-
-    const int16_t* frame = audio + (f * kOutputSamples);
-    int vadResult        = fvad_process(vad_, frame, kOutputSamples);
-    if (vadResult < 0) {
-      finalMask.push_back(false);
-      continue;
-    }
-    finalMask.push_back(vadResult == 1);
-  }
-
-  return finalMask;
+  int result = fvad_process(vad_, frame, kOutputSamples);
+  return (result == 1);
 }
 
 void
