@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -12,15 +13,26 @@ extern "C" {
 #include "audio_accumulator.hpp"
 #include "audio_noise_level.hpp"
 #include "audio_resampler.hpp"
+#include "audio_simple_voice_detect.hpp"
 #include "consts.h"
 
 static void
-fillSineWave(AVFrame* frame, double freq, double sampleRate, double timeOffset) {
+fillDC(AVFrame* frame, float value) {
+  float* left  = reinterpret_cast<float*>(frame->extended_data[0]);
+  float* right = reinterpret_cast<float*>(frame->extended_data[1]);
+  for (int i = 0; i < frame->nb_samples; i++) {
+    left[i]  = value;
+    right[i] = value;
+  }
+}
+
+static void
+fillQuietSine(AVFrame* frame, double freq, double sampleRate, double timeOffset, float amplitude) {
   float* left  = reinterpret_cast<float*>(frame->extended_data[0]);
   float* right = reinterpret_cast<float*>(frame->extended_data[1]);
   for (int i = 0; i < frame->nb_samples; i++) {
     double t  = static_cast<double>(i) / sampleRate + timeOffset;
-    float val = static_cast<float>(0.5 * std::sin(2.0 * M_PI * freq * t));
+    float val = static_cast<float>(amplitude * std::sin(2.0 * M_PI * freq * t));
     left[i]   = val;
     right[i]  = val;
   }
@@ -60,7 +72,14 @@ main() {
 
   double timeOffset = 0.0;
   for (int frameIdx = 0; frameIdx < kTotalFrames; ++frameIdx) {
-    fillSineWave(inputFrame, 440.0, kInputSampleRate, timeOffset);
+    bool isVoiceBlock = ((frameIdx / 100) % 2 == 0);
+
+    if (isVoiceBlock) {
+      fillDC(inputFrame, 1.0f);
+    } else {
+      fillQuietSine(inputFrame, 440.0, kInputSampleRate, timeOffset, 0.01f);
+    }
+
     timeOffset += kInputFrameMs / 1000.0;
 
     const int16_t* pcm = resampler.processFrame(inputFrame);
@@ -86,7 +105,7 @@ main() {
     }
 
     if (ready && frameIdx == kTotalFrames - 1) {
-      std::cout << "Accumulator is ready! \n";
+      std::cout << "Accumulator is ready!\n";
     }
   }
 
@@ -101,22 +120,36 @@ main() {
             << "  Total samples : " << bigSamples << "\n"
             << "  Duration      : " << (bigSamples * 1000.0 / kOutputSampleRate) << " ms\n"
             << "  First 10 samples : ";
-  for (int i = 0; i < 10 && i < bigSamples; ++i) {
+  for (int i = 0; i < 10 && i < bigSamples; ++i)
     std::cout << bigData[i] << " ";
-  }
   std::cout << "\n"
             << "  Last 10 samples  : ";
-  for (int i = bigSamples - 10; i < bigSamples; ++i) {
+  for (int i = bigSamples - 10; i < bigSamples; ++i)
     std::cout << bigData[i] << " ";
-  }
   std::cout << "\n";
-
-  AudioNoiseLevel noiseLevel;
+ AudioNoiseLevel noiseLevel;
   float noiseDb = noiseLevel.computeNoiseFloor(bigData, bigSamples);
   std::cout << "  Noise floor : " << noiseDb << " dB\n";
 
-  av_frame_free(&inputFrame);
+  constexpr float kMarginDb = 6.0f;
+  AudioSimpleVoiceDetect detector(noiseDb, kMarginDb);
+  auto voiceMask = detector.detect(bigData, bigSamples);
 
+  size_t voiceFrames = 0;
+  for (bool v : voiceMask) {
+    if (v) {
+      ++voiceFrames;
+    }
+  }
+  std::cout << "Voice frames: " << voiceFrames << " / " << voiceMask.size() << "\n";
+
+  std::cout << "First 200 decisions: ";
+  for (size_t i = 0; i < 200 && i < voiceMask.size(); ++i) {
+    std::cout << (voiceMask[i] ? 'V' : 'S');
+  }
+  std::cout << "\n";
+
+  av_frame_free(&inputFrame);
   std::cout << "\nTest passed.\n";
   return 0;
 }

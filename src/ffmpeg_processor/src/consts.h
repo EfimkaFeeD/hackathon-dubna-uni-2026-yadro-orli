@@ -15,4 +15,7 @@ constexpr int kAccumulatorFrameMs       = kOutputFrameMs;
 constexpr int kAccumulatorTargetMs      = 10000;                                             // 10s
 constexpr int kAccumulatorTargetSamples = (kOutputSampleRate * kAccumulatorTargetMs) / 1000; // 480000
 
+// AudioSimpleVoiceDetect
+constexpr float kDefaultMarginDb = 3.0F;
+
 #endif // PODCAST_SILENCE_REMOVER_SRC_CONSTS_H
