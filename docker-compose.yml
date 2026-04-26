@@ -1,0 +1,36 @@
+version: '3.8'
+services:
+  plugin-compiler:
+    build:
+      context: ./src/ffmpeg_processor
+      dockerfile: Dockerfile
+    volumes:
+      - ./shared_plugins:/shared_output
+  storage-service:
+    build:
+      context: ./src/database/objectStorage
+    ports:
+        - "8081:8081"
+    volumes:
+        - ./storage/disk:/app/storage/disk
+    restart: always
+  backend:
+    build:
+      context: .
+      dockerfile: ./src/backend/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      storage-service:
+        condition: service_started
+      plugin-compiler:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      - STORAGE_SERVICE_URL=http://storage-service:8081
+    volumes:
+      - ./shared_plugins:/app/plugins:ro
+      - ./data:/app/data
+      - ./storage/disk:/app/storage/disk
+      - ./src/frontend:/static:ro
