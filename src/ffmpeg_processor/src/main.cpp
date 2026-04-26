@@ -14,6 +14,7 @@ extern "C" {
 #include "audio_noise_level.hpp"
 #include "audio_resampler.hpp"
 #include "audio_simple_voice_detect.hpp"
+#include "audio_voice_activity_detect.hpp"
 #include "consts.h"
 
 static void
@@ -127,7 +128,7 @@ main() {
   for (int i = bigSamples - 10; i < bigSamples; ++i)
     std::cout << bigData[i] << " ";
   std::cout << "\n";
- AudioNoiseLevel noiseLevel;
+  AudioNoiseLevel noiseLevel;
   float noiseDb = noiseLevel.computeNoiseFloor(bigData, bigSamples);
   std::cout << "  Noise floor : " << noiseDb << " dB\n";
 
@@ -146,6 +147,23 @@ main() {
   std::cout << "First 200 decisions: ";
   for (size_t i = 0; i < 200 && i < voiceMask.size(); ++i) {
     std::cout << (voiceMask[i] ? 'V' : 'S');
+  }
+  std::cout << "\n";
+
+  AudioVoiceActivityDetect vadDetector(1);
+  auto finalMask = vadDetector.detect(bigData, bigSamples, voiceMask);
+
+  size_t finalVoiceFrames = 0;
+  for (bool v : finalMask) {
+    if (v) {
+      ++finalVoiceFrames;
+    }
+  }
+  std::cout << "After VAD: voice frames: " << finalVoiceFrames << " / " << finalMask.size() << "\n";
+
+  std::cout << "First 200 final decisions: ";
+  for (size_t i = 0; i < 200 && i < finalMask.size(); ++i) {
+    std::cout << (finalMask[i] ? 'V' : 'S');
   }
   std::cout << "\n";
 
