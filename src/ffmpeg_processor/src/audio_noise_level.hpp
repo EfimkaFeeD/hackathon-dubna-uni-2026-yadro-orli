@@ -6,7 +6,9 @@
 
 class AudioNoiseLevel {
  public:
-  static float computeNoiseFloor(const int16_t* samples, size_t count);
+  float computeNoiseFloor(const int16_t* samples, size_t count);
+ private:
+  static float computePercentileNoiseFloor(const int16_t* samples, size_t count);
 };
 
 #endif // PODCAST_SILENCE_REMOVER_SRC_AUDIO_NOISE_LEVEL_HPP

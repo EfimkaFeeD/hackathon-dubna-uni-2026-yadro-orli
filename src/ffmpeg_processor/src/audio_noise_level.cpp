@@ -13,22 +13,53 @@ extern "C" {
 #include <libavutil/samplefmt.h>
 }
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <exception>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "consts.h"
 
+static float
+frameRmsDb(const int16_t* frame) {
+  double sumSq = 0.0;
+  for (int i = 0; i < kOutputSamples; ++i) {
+    auto s = static_cast<double>(frame[i]);
+    sumSq += s * s;
+  }
+  double rms = std::sqrt(sumSq / kOutputSamples);
+  return 20.0f * std::log10(std::max(rms / 32768.0, 1e-10));
+}
+
+float
+AudioNoiseLevel::computePercentileNoiseFloor(const int16_t* samples, size_t count) {
+  size_t numFrames = count / kOutputSamples;
+  if (numFrames == 0) {
+    return 0.0f;
+  }
+
+  std::vector<float> rmsDbValues;
+  rmsDbValues.reserve(numFrames);
+  for (size_t f = 0; f < numFrames; ++f) {
+    rmsDbValues.push_back(frameRmsDb(samples + (f * kOutputSamples)));
+  }
+
+  std::ranges::sort(rmsDbValues);
+  auto idx = static_cast<size_t>(numFrames * 0.10);
+  if (idx >= numFrames) {
+    idx = numFrames - 1;
+  }
+  return rmsDbValues.at(idx);
+}
+
 float
 AudioNoiseLevel::computeNoiseFloor(const int16_t* samples, size_t count) {
-  int oldLogLevel = av_log_get_level();
-  av_log_set_level(AV_LOG_QUIET);
-
   if ((samples == nullptr) || count == 0) {
-    return 0.0F;
+    return 0.0f;
   }
 
   AVFilterGraph* filterGraph     = nullptr;
@@ -37,12 +68,15 @@ AudioNoiseLevel::computeNoiseFloor(const int16_t* samples, size_t count) {
   AVFilterContext* astatsCtx     = nullptr;
   AVFrame* inputFrame            = nullptr;
   AVFrame* outputFrame           = nullptr;
-  float noiseFloorDb             = 0.0F;
+  float noiseFloorDb             = 0.0f;
+
+  int oldLogLevel = av_log_get_level();
+  av_log_set_level(AV_LOG_QUIET);
 
   try {
     filterGraph = avfilter_graph_alloc();
     if (filterGraph == nullptr) {
-      throw std::runtime_error("avfilter_graph_alloc");
+      throw std::runtime_error("alloc");
     }
 
     const AVFilter* buffersrc = avfilter_get_by_name("abuffer");
@@ -87,12 +121,11 @@ AudioNoiseLevel::computeNoiseFloor(const int16_t* samples, size_t count) {
     if (av_buffersrc_add_frame(buffersrcCtx, inputFrame) < 0) {
       throw std::runtime_error("buffersrc add");
     }
-
     if (av_buffersrc_add_frame(buffersrcCtx, nullptr) < 0) {
       throw std::runtime_error("buffersrc flush");
     }
-    outputFrame = av_frame_alloc();
 
+    outputFrame = av_frame_alloc();
     if (outputFrame == nullptr) {
       throw std::runtime_error("output frame alloc");
     }
@@ -110,11 +143,16 @@ AudioNoiseLevel::computeNoiseFloor(const int16_t* samples, size_t count) {
     }
 
     if ((tag != nullptr) && (tag->value != nullptr)) {
-      noiseFloorDb = std::stof(tag->value);
+      try {
+        noiseFloorDb = std::stof(tag->value);
+      } catch (...) {
+        noiseFloorDb = -INFINITY;
+      }
+    } else {
+      noiseFloorDb = -INFINITY;
     }
-  } catch (const std::exception& e) {
-    std::fprintf(stderr, "AudioNoiseLevel error: %s\n", e.what());
-    noiseFloorDb = 0.0F;
+  } catch (...) {
+    noiseFloorDb = -INFINITY;
   }
 
   if (outputFrame != nullptr) {
@@ -130,6 +168,10 @@ AudioNoiseLevel::computeNoiseFloor(const int16_t* samples, size_t count) {
   }
 
   av_log_set_level(oldLogLevel);
+
+  if (std::isinf(noiseFloorDb) && noiseFloorDb < 0) {
+    noiseFloorDb = computePercentileNoiseFloor(samples, count);
+  }
 
   return noiseFloorDb;
 }

@@ -1,173 +1,92 @@
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/frame.h>
-#include <libavutil/samplefmt.h>
+#include <libavutil/log.h>
 }
 
-#include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <iomanip>
 #include <iostream>
+#include <string>
 
 #include "audio_accumulator.hpp"
+#include "audio_file_to_ffmpeg_format.hpp"
 #include "audio_noise_level.hpp"
 #include "audio_resampler.hpp"
 #include "audio_simple_voice_detect.hpp"
 #include "audio_voice_activity_detect.hpp"
 #include "consts.h"
 
-static void
-fillDC(AVFrame* frame, float value) {
-  float* left  = reinterpret_cast<float*>(frame->extended_data[0]);
-  float* right = reinterpret_cast<float*>(frame->extended_data[1]);
-  for (int i = 0; i < frame->nb_samples; i++) {
-    left[i]  = value;
-    right[i] = value;
-  }
-}
-
-static void
-fillQuietSine(AVFrame* frame, double freq, double sampleRate, double timeOffset, float amplitude) {
-  float* left  = reinterpret_cast<float*>(frame->extended_data[0]);
-  float* right = reinterpret_cast<float*>(frame->extended_data[1]);
-  for (int i = 0; i < frame->nb_samples; i++) {
-    double t  = static_cast<double>(i) / sampleRate + timeOffset;
-    float val = static_cast<float>(amplitude * std::sin(2.0 * M_PI * freq * t));
-    left[i]   = val;
-    right[i]  = val;
-  }
-}
-
 int
-main() {
-  constexpr int kInputSampleRate = 44100;
-  constexpr int kInputFrameMs    = 10;
-  constexpr int nb_samples       = kInputSampleRate * kInputFrameMs / 1000;
-  static_assert(nb_samples > 0);
+main(int argc, char* argv[]) {
+  const char* filename = (argc > 1) ? argv[1] : "input.mp3";
 
-  constexpr int kTotalFrames = kAccumulatorTargetSamples / kOutputSamples;
-  static_assert(kAccumulatorTargetSamples % kOutputSamples == 0,
-                "Target duration must be a multiple of frame duration");
+  av_log_set_level(AV_LOG_QUIET);
 
-  AVFrame* inputFrame = av_frame_alloc();
-  if (inputFrame == nullptr) {
-    std::cerr << "Failed to allocate input frame.\n";
-    return 1;
-  }
-  inputFrame->format      = AV_SAMPLE_FMT_FLTP;
-  inputFrame->sample_rate = kInputSampleRate;
-  inputFrame->nb_samples  = nb_samples;
-  av_channel_layout_default(&inputFrame->ch_layout, 2);
-
-  if (av_frame_get_buffer(inputFrame, 0) < 0) {
-    std::cerr << "Failed to allocate input buffer.\n";
-    av_frame_free(&inputFrame);
-    return 1;
-  }
-
+  AudioFileToFFmpegFormat source(filename);
   AudioResampler resampler;
   AudioAccumulator accum;
+  AudioNoiseLevel noiseLevel;
+  AudioVoiceActivityDetect vadDetector(1);
 
-  std::cout << "Processing " << kTotalFrames << " frames (" << kTotalFrames * kInputFrameMs << " ms) ...\n";
+  int chunkIndex          = 0;
+  size_t totalVoiceFrames = 0;
 
-  double timeOffset = 0.0;
-  for (int frameIdx = 0; frameIdx < kTotalFrames; ++frameIdx) {
-    bool isVoiceBlock = ((frameIdx / 100) % 2 == 0);
+  std::cout << "Processing file: " << filename << "\n";
 
-    if (isVoiceBlock) {
-      fillDC(inputFrame, 1.0f);
-    } else {
-      fillQuietSine(inputFrame, 440.0, kInputSampleRate, timeOffset, 0.01f);
+  while (true) {
+    AVFrame* originalFrame = source.getNextFrame();
+    if (originalFrame == nullptr) {
+      break;
     }
 
-    timeOffset += kInputFrameMs / 1000.0;
-
-    const int16_t* pcm = resampler.processFrame(inputFrame);
+    const int16_t* pcm = resampler.processFrame(originalFrame);
     if (pcm == nullptr) {
-      std::cerr << "Resampling failed at frame " << frameIdx << "!\n";
-      av_frame_free(&inputFrame);
+      std::cerr << "Resampling failed\n";
       return 1;
     }
 
-    bool ready = accum.addFrame(pcm);
+    bool full = accum.addFrame(pcm);
 
-    if ((frameIdx + 1) % 100 == 0) {
-      std::cout << "  Frame " << frameIdx + 1 << "/" << kTotalFrames << " (accumulated " << accum.currentSize()
-                << " samples)\n";
-    }
+    if (full) {
+      chunkIndex++;
+      auto [bigData, bigSamples] = accum.getAccumulatedData();
 
-    if (frameIdx == 0) {
-      std::cout << "First 10 samples of first frame (resampled): ";
-      for (int i = 0; i < 10; ++i) {
-        std::cout << pcm[i] << " ";
+      float noiseDb = noiseLevel.computeNoiseFloor(bigData, bigSamples);
+
+      constexpr float kMarginDb = 6.0f;
+      AudioSimpleVoiceDetect simpleDetector(noiseDb, kMarginDb);
+      auto simpleMask = simpleDetector.detect(bigData, bigSamples);
+      auto finalMask  = vadDetector.detect(bigData, bigSamples, simpleMask);
+
+      size_t voiceFrames = 0;
+      for (bool v : finalMask) {
+        if (v) {
+          ++voiceFrames;
+        }
+      }
+      totalVoiceFrames += voiceFrames;
+
+      std::cout << "\n=== Chunk " << chunkIndex << " ===\n";
+      std::cout << "  Duration      : " << (bigSamples * 1000.0 / kOutputSampleRate) << " ms\n";
+      std::cout << "  Noise floor   : " << noiseDb << " dB\n";
+      std::cout << "  Voice frames  : " << voiceFrames << " / " << finalMask.size() << "\n";
+
+      std::cout << "  First 50 decisions  : ";
+      for (size_t i = 0; i < 50 && i < finalMask.size(); ++i) {
+        std::cout << (finalMask[i] ? 'V' : 'S');
+      }
+      std::cout << "\n  Last 50 decisions   : ";
+      size_t start = (finalMask.size() > 50) ? finalMask.size() - 50 : 0;
+      for (size_t i = start; i < finalMask.size(); ++i) {
+        std::cout << (finalMask.at(i) ? 'V' : 'S');
       }
       std::cout << "\n";
     }
-
-    if (ready && frameIdx == kTotalFrames - 1) {
-      std::cout << "Accumulator is ready!\n";
-    }
   }
 
-  if (!accum.isReady()) {
-    std::cerr << "Accumulator not ready after " << kTotalFrames << " frames!\n";
-    av_frame_free(&inputFrame);
-    return 1;
-  }
-
-  auto [bigData, bigSamples] = accum.getAccumulatedData();
-  std::cout << "\nAccumulated chunk:\n"
-            << "  Total samples : " << bigSamples << "\n"
-            << "  Duration      : " << (bigSamples * 1000.0 / kOutputSampleRate) << " ms\n"
-            << "  First 10 samples : ";
-  for (int i = 0; i < 10 && i < bigSamples; ++i)
-    std::cout << bigData[i] << " ";
-  std::cout << "\n"
-            << "  Last 10 samples  : ";
-  for (int i = bigSamples - 10; i < bigSamples; ++i)
-    std::cout << bigData[i] << " ";
-  std::cout << "\n";
-  AudioNoiseLevel noiseLevel;
-  float noiseDb = noiseLevel.computeNoiseFloor(bigData, bigSamples);
-  std::cout << "  Noise floor : " << noiseDb << " dB\n";
-
-  constexpr float kMarginDb = 6.0f;
-  AudioSimpleVoiceDetect detector(noiseDb, kMarginDb);
-  auto voiceMask = detector.detect(bigData, bigSamples);
-
-  size_t voiceFrames = 0;
-  for (bool v : voiceMask) {
-    if (v) {
-      ++voiceFrames;
-    }
-  }
-  std::cout << "Voice frames: " << voiceFrames << " / " << voiceMask.size() << "\n";
-
-  std::cout << "First 200 decisions: ";
-  for (size_t i = 0; i < 200 && i < voiceMask.size(); ++i) {
-    std::cout << (voiceMask[i] ? 'V' : 'S');
-  }
-  std::cout << "\n";
-
-  AudioVoiceActivityDetect vadDetector(1);
-  auto finalMask = vadDetector.detect(bigData, bigSamples, voiceMask);
-
-  size_t finalVoiceFrames = 0;
-  for (bool v : finalMask) {
-    if (v) {
-      ++finalVoiceFrames;
-    }
-  }
-  std::cout << "After VAD: voice frames: " << finalVoiceFrames << " / " << finalMask.size() << "\n";
-
-  std::cout << "First 200 final decisions: ";
-  for (size_t i = 0; i < 200 && i < finalMask.size(); ++i) {
-    std::cout << (finalMask[i] ? 'V' : 'S');
-  }
-  std::cout << "\n";
-
-  av_frame_free(&inputFrame);
-  std::cout << "\nTest passed.\n";
+  std::cout << "\nProcessing complete.\n";
+  std::cout << "Total chunks processed: " << chunkIndex << "\n";
+  std::cout << "Total voice frames: " << totalVoiceFrames << "\n";
   return 0;
 }
