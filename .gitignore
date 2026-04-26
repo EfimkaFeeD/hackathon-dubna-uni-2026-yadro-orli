@@ -1,5 +1,6 @@
 src/backend/target/
 src/backend/.idea/
+.env
 src/backend/.env
 src/backend/src/data
  
