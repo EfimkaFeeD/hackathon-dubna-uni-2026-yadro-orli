@@ -8,37 +8,30 @@
 </head>
 <body>
     <div class="app-container">
-        <header>
-        </header>
-
         <main class="controls">
             <div class="upload-section">
                 <label for="audioInput" class="file-label">Добавить файлы:</label>
                 <input type="file" id="audioInput" accept="audio/*" multiple>
             </div>
-
             <div class="player-section">
                 <h3>Сейчас играет:</h3>
                 <audio id="audioPlayer" controls></audio>
                 <div class="speed-control">
-                    <label>Скорость воспроизведения:</label>
+                    <label>Скорость:</label>
                     <select id="playbackRate">
                         <option value="0.5">0.5x</option>
                         <option value="1.0" selected>1.0x</option>
-                        <option value="1.25">1.25x</option>
                         <option value="1.5">1.5x</option>
                         <option value="2.0">2.0x</option>
                     </select>
                 </div>
             </div>
-
             <div class="file-list-section">
                 <h3>Мои файлы:</h3>
                 <ul id="fileList" class="file-list"></ul>
             </div>
         </main>
     </div>
-
     <script src="js/streamer.js"></script>
     <script src="js/script.js"></script>
 </body>
