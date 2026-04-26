@@ -1,7 +1,7 @@
 #include "dataBase.h"
 
 dataBase::dataBase() {
-    int errorCode = sqlite3_open("dataBase.db", &db);
+    int errorCode = sqlite3_open("../data/dataBase.db", &db);
     if (errorCode != SQLITE_OK) {
         std::cerr << "Cannot open database" << sqlite3_errmsg(db) << std::endl;
     }
