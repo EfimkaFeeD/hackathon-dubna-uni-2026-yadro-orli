@@ -1,62 +1,54 @@
-use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
-use futures::{SinkExt, StreamExt};
-use std::net::SocketAddr;
+mod config;
+mod errors;
+mod auth;
+mod db;
+mod storage;
+mod storage_client;
+mod plugin;
+mod session;
+mod models;
+mod routes;
+
+use config::AppConfig;
+use sqlx::SqlitePool;
+use storage::StorageService;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use std::fs;
+
+#[derive(Clone)]
+pub struct AppState{
+    pub db: SqlitePool,
+    pub config: AppConfig,
+    pub storage: StorageService,
+}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    println!("Server starting...");
+    tracing::info!("Server starting");
 
-    let static_files = ServeDir::new("../../frontend").append_index_html_on_directories(true);
+    fs::create_dir_all("data")?;
 
-    let app = Router::new()
-        .route("/ws", get(ws_handler))
-        .fallback_service(static_files);
+    let config = AppConfig::from_env();
+    let db = db::init_pool(&config.database_url).await?;
+    tracing::info!("DataBase connected");
+    let storage = StorageService::new(&config.storage_url);
+    tracing::info!("Storage service started");
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    println!("Listening on http://{}", addr);
+    let state = AppState{db, config: config.clone(), storage};
+    let static_files = ServeDir::new("../../frontend/").append_index_html_on_directories(true);
+    let app = routes::create_router(state).fallback_service(static_files);
 
-    axum::serve(listener, app).await.unwrap();
+    let addr = format!("127.0.0.1:{}", config.server_port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    tracing::info!("Listening: {}", addr);
+
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
-}
-
-async fn handle_socket(socket: WebSocket) {
-    println!("WebSocket connected");
-    let (mut tx, mut rx) = socket.split();
-
-    while let Some(Ok(msg)) = rx.next().await {
-        match msg {
-            Message::Text(text) if text.contains(r#""type":"init""#) => {
-                println!("Init received");
-                let _ = tx.send(Message::Text(r#"{"extension":".wav"}"#.into())).await;
-            }
-            Message::Text(text) if text.contains(r#""type":"end""#) => {
-                println!("Stream ended");
-                break;
-            }
-            Message::Binary(data) => {
-                if tx.send(Message::Binary(data)).await.is_err() {
-                    println!("Client disconnected");
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    println!("WebSocket disconnected");
-}
