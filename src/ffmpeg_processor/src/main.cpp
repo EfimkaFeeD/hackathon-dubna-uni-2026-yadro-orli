@@ -1,5 +1,5 @@
+#include "audio_accumulator.hpp"
 #include "audio_resampler.hpp"
-
 #include "consts.h"
 
 extern "C" {
@@ -10,14 +10,15 @@ extern "C" {
 
 #include <cmath>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 
 static void
-fillSineWave(AVFrame* frame, double freq, double sampleRate) {
+fillSineWave(AVFrame* frame, double freq, double sampleRate, double timeOffset) {
   float* left  = reinterpret_cast<float*>(frame->extended_data[0]);
   float* right = reinterpret_cast<float*>(frame->extended_data[1]);
   for (int i = 0; i < frame->nb_samples; i++) {
-    double t  = static_cast<double>(i) / sampleRate;
+    double t  = static_cast<double>(i) / sampleRate + timeOffset;
     float val = static_cast<float>(0.5 * std::sin(2.0 * M_PI * freq * t));
     left[i]   = val;
     right[i]  = val;
@@ -31,6 +32,10 @@ main() {
   const int nb_samples           = kInputSampleRate * kInputFrameMs / 1000;
   static_assert(nb_samples > 0);
 
+  constexpr int kTotalFrames = kAccumulatorTargetSamples / kOutputSamples;
+  static_assert(kAccumulatorTargetSamples % kOutputSamples == 0,
+                "Target duration must be a multiple of frame duration");
+
   AVFrame* inputFrame = av_frame_alloc();
   if (inputFrame == nullptr) {
     std::cerr << "Failed to allocate input frame.\n";
@@ -39,7 +44,6 @@ main() {
   inputFrame->format      = AV_SAMPLE_FMT_FLTP;
   inputFrame->sample_rate = kInputSampleRate;
   inputFrame->nb_samples  = nb_samples;
-
   av_channel_layout_default(&inputFrame->ch_layout, 2);
 
   if (av_frame_get_buffer(inputFrame, 0) < 0) {
@@ -48,25 +52,65 @@ main() {
     return 1;
   }
 
-  fillSineWave(inputFrame, 440.0, kInputSampleRate);
-
   AudioResampler resampler;
-  const int16_t* out = resampler.processFrame(inputFrame);
-  if (out == nullptr) {
-    std::cerr << "Resampling failed!\n";
+  AudioAccumulator accum;
+
+  std::cout << "Processing " << kTotalFrames << " frames (" << kTotalFrames * kInputFrameMs << " ms) ...\n";
+
+  double timeOffset = 0.0;
+  for (int frameIdx = 0; frameIdx < kTotalFrames; ++frameIdx) {
+    fillSineWave(inputFrame, 440.0, kInputSampleRate, timeOffset);
+    timeOffset += kInputFrameMs / 1000.0;
+
+    const int16_t* pcm = resampler.processFrame(inputFrame);
+    if (pcm == nullptr) {
+      std::cerr << "Resampling failed at frame " << frameIdx << "!\n";
+      av_frame_free(&inputFrame);
+      return 1;
+    }
+
+    bool ready = accum.addFrame(pcm);
+
+    if ((frameIdx + 1) % 100 == 0) {
+      std::cout << "  Frame " << frameIdx + 1 << "/" << kTotalFrames << " (accumulated " << accum.currentSize()
+                << " samples)\n";
+    }
+
+    if (frameIdx == 0) {
+      std::cout << "First 10 samples of first frame (resampled): ";
+      for (int i = 0; i < 10; ++i) {
+        std::cout << pcm[i] << " ";
+      }
+      std::cout << "\n";
+    }
+
+    if (ready && frameIdx == kTotalFrames - 1) {
+      std::cout << "Accumulator is ready! \n";
+    }
+  }
+
+  if (!accum.isReady()) {
+    std::cerr << "Accumulator not ready after " << kTotalFrames << " frames!\n";
     av_frame_free(&inputFrame);
     return 1;
   }
 
-  std::cout << "First 10 output samples (16-bit PCM, mono, 48 kHz):\n";
-  for (int i = 0; i < 10 && i < kOutputSamples; ++i) {
-    std::cout << out[i] << " ";
+  auto [bigData, bigSamples] = accum.getAccumulatedData();
+  std::cout << "\nAccumulated chunk:\n"
+            << "  Total samples : " << bigSamples << "\n"
+            << "  Duration      : " << (bigSamples * 1000.0 / kOutputSampleRate) << " ms\n"
+            << "  First 10 samples : ";
+  for (int i = 0; i < 10 && i < bigSamples; ++i) {
+    std::cout << bigData[i] << " ";
+  }
+  std::cout << "\n"
+            << "  Last 10 samples  : ";
+  for (int i = bigSamples - 10; i < bigSamples; ++i) {
+    std::cout << bigData[i] << " ";
   }
   std::cout << "\n";
 
-  std::cout << "Output sample count: " << kOutputSamples << " (" << kOutputBufferSize << " bytes)\n";
-
   av_frame_free(&inputFrame);
-  std::cout << "Test passed.\n";
+  std::cout << "\nTest passed.\n";
   return 0;
 }
