@@ -2,7 +2,7 @@
 # Зависимости: libfvad, libswresample, libavfilter, libavutil, libavcodec, libavformat
 # -DBUILD_SHARED_LIB=ON для сборки динамической библиотеки
 
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.25)
 
 project(ffmpeg_processor C CXX)
 
