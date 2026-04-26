@@ -11,30 +11,19 @@ class AudioStreamer {
         this.sourceBuffer = null;
         this.queue = [];
         
-        // Параметры аудио (получаем с сервера или используем дефолтные)
         this.sampleRate = 44100;
         this.channels = 1;
         this.bitsPerSample = 16;
         
         this.currentExt = 'wav';
-        this.useMSE = false; // Используем сборку WAV, не MSE
-        this.mimeMap = {
-            'mp3': 'audio/mpeg',
-            'wav': 'audio/wav',
-            'ogg': 'audio/ogg',
-            'm4a': 'audio/mp4',
-            'aac': 'audio/aac',
-            'flac': 'audio/flac',
-            'opus': 'audio/ogg; codecs=opus',
-            'webm': 'audio/webm; codecs=opus'
-        };
-
-        this.currentExt = 'wav';
-        this.useMSE = true;
+        this.useMSE = false; 
         this.audioElement = null;
         this.status = 'waiting';
         this.blobUrl = null;
         this.onStatusChange = null;
+
+        this.originalDuration = 0; 
+        this.processedDuration = 0;
     }
 
     start() {
@@ -80,7 +69,6 @@ class AudioStreamer {
         this.socket.onclose = (event) => {
             console.log("WebSocket closed, code:", event.code, "reason:", event.reason);
             this._finalize();
-            this._updateStatus('finished');
         };
 
         this.socket.onerror = (error) => {
@@ -148,12 +136,10 @@ class AudioStreamer {
         const buffer = new ArrayBuffer(44 + dataSize);
         const view = new DataView(buffer);
         
-        // RIFF chunk
         this._writeString(view, 0, 'RIFF');
         view.setUint32(4, fileSize, true);
         this._writeString(view, 8, 'WAVE');
         
-        // fmt chunk
         this._writeString(view, 12, 'fmt ');
         view.setUint32(16, 16, true);
         view.setUint16(20, 1, true);
@@ -163,7 +149,6 @@ class AudioStreamer {
         view.setUint16(32, blockAlign, true);
         view.setUint16(34, this.bitsPerSample, true);
         
-        // data chunk
         this._writeString(view, 36, 'data');
         view.setUint32(40, dataSize, true);
         
@@ -189,26 +174,45 @@ class AudioStreamer {
     _finalize() {
         if (this.collectedChunks.length === 0) {
             console.warn("No chunks collected for file:", this.file.name);
+            this._updateStatus('finished');
             return;
         }
 
         console.log("Finalizing, chunks count:", this.collectedChunks.length);
         
-        // Создаём корректный WAV файл из PCM чанков
         const blob = this._createWavBlob();
         
         if (this.blobUrl && this.blobUrl !== 'null') {
             URL.revokeObjectURL(this.blobUrl);
         }
-        
-        this.blobUrl = URL.createObjectURL(blob);
-        console.log("Blob URL created:", this.blobUrl);
-        
-        if (this.audioElement && this.blobUrl && this.blobUrl !== 'null') {
-            console.log("Setting audio src to blob URL");
-            this.audioElement.src = this.blobUrl;
-            this.audioElement.play().catch(e => console.warn("Auto-play error:", e));
-        }
+
+        const tempUrl = URL.createObjectURL(blob);
+        const tempAudio = new Audio();
+        tempAudio.src = tempUrl;
+
+        const onReady = () => {
+            this.blobUrl = URL.createObjectURL(blob);
+            console.log("Blob URL created:", this.blobUrl);
+            
+            if (this.audioElement && this.blobUrl && this.blobUrl !== 'null') {
+                console.log("Setting audio src to blob URL");
+                this.audioElement.src = this.blobUrl;
+                this.audioElement.play().catch(e => console.warn("Auto-play error:", e));
+            }
+
+            this._updateStatus('finished');
+        };
+
+        tempAudio.addEventListener('loadedmetadata', () => {
+            this.processedDuration = tempAudio.duration;
+            URL.revokeObjectURL(tempUrl);
+            onReady();
+        });
+
+        tempAudio.addEventListener('error', () => {
+            URL.revokeObjectURL(tempUrl);
+            onReady();
+        });
     }
 
     _updateStatus(newStatus) {
