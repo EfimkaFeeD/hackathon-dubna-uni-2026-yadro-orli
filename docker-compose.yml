@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  plugin-compiler:
+    build:
+      context: ./src/ffmpeg_processor/src
+      dockerfile: Dockerfile
+    volumes:
+      - ./shared_plugins:/shared_output
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      plugin-compiler:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    volumes:
+      - ./shared_plugins:/app/plugins:ro
+      - ./data:/app/data
+      - ./storage/disk:/app/storage/disk
+    tmpfs:
+      - /app/storage/ram:size=1G
+    restart: always

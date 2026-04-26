@@ -35,8 +35,10 @@ run mkdir -p /app/data /app/storage/disk /app/storage/ram /app/plugins
 
 copy --from=builder /app/target/release/backend /usr/local/bin/backend
 
+COPY src/frontend /app/static
+
 env LD_LIBRARY_PATH=/usr/local/lib
-env DATABASE_URL=""
+env DATABASE_URL="sqlite:///app/data/backend.db"
 
 expose 8080
-cmd["backend"]
+cmd ["backend"]
