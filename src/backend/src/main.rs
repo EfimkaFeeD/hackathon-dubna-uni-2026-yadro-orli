@@ -16,6 +16,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    println!("Server starting...");
+
     let static_files = ServeDir::new("../../frontend").append_index_html_on_directories(true);
 
     let app = Router::new()
@@ -24,7 +26,8 @@ async fn main() {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    println!("🌐 http://{}", addr);
+    println!("Listening on http://{}", addr);
+
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -33,17 +36,27 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 async fn handle_socket(socket: WebSocket) {
+    println!("WebSocket connected");
     let (mut tx, mut rx) = socket.split();
 
     while let Some(Ok(msg)) = rx.next().await {
         match msg {
-            Message::Text(t) if t.contains(r#""type":"init""#) => {
+            Message::Text(text) if text.contains(r#""type":"init""#) => {
+                println!("Init received");
                 let _ = tx.send(Message::Text(r#"{"extension":".wav"}"#.into())).await;
             }
+            Message::Text(text) if text.contains(r#""type":"end""#) => {
+                println!("Stream ended");
+                break;
+            }
             Message::Binary(data) => {
-                let _ = tx.send(Message::Binary(data)).await;
+                if tx.send(Message::Binary(data)).await.is_err() {
+                    println!("Client disconnected");
+                    break;
+                }
             }
             _ => {}
         }
     }
+    println!("WebSocket disconnected");
 }
