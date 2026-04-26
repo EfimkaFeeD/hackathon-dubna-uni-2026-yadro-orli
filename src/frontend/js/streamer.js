@@ -18,6 +18,19 @@ class AudioStreamer {
         
         this.currentExt = 'wav';
         this.useMSE = false; // Используем сборку WAV, не MSE
+        this.mimeMap = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'ogg': 'audio/ogg',
+            'm4a': 'audio/mp4',
+            'aac': 'audio/aac',
+            'flac': 'audio/flac',
+            'opus': 'audio/ogg; codecs=opus',
+            'webm': 'audio/webm; codecs=opus'
+        };
+
+        this.currentExt = 'wav';
+        this.useMSE = true;
         this.audioElement = null;
         this.status = 'waiting';
         this.blobUrl = null;
