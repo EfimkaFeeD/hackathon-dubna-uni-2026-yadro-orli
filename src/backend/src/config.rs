@@ -8,12 +8,12 @@ pub struct AppConfig {
     pub storage_url: String,
 }
 
-impl AppConfig{
+impl AppConfig {
     pub fn from_env() -> Self {
         dotenvy::dotenv().ok();
         Self {
             database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite://./data/app.db?mode=rwc".into()),
+                .unwrap_or_else(|_| "sqlite://./data/backend.db?mode=rwc".into()),
             jwt_secret: std::env::var("JWT_SECRET")
                 .unwrap_or_else(|_| "ruFzVtgAxWSqmPs0z5KEU2goUcbUecSs".into()),
             server_port: std::env::var("PORT")

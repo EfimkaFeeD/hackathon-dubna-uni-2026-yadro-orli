@@ -1,168 +1,206 @@
 class AudioStreamer {
-  constructor(wsUrl) {
-    this.wsUrl = wsUrl;
-    this.socket = null;
-    this.collectedChunks = [];
-    this.mediaSource = null;
-    this.sourceBuffer = null;
-    this.queue = [];
-    this.sessionId = "sess_" + Math.random().toString(36).substr(2, 9);
+    constructor(wsUrl, sessionId, file) {
+        this.wsUrl = wsUrl;
+        this.sessionId = sessionId;
+        this.file = file;
+        this.id = Math.random().toString(36).substring(2, 9);
+        
+        this.socket = null;
+        this.collectedChunks = [];
+        this.mediaSource = null;
+        this.sourceBuffer = null;
+        this.queue = [];
+        
+        // Параметры аудио (получаем с сервера или используем дефолтные)
+        this.sampleRate = 44100;
+        this.channels = 1;
+        this.bitsPerSample = 16;
+        
+        this.currentExt = 'wav';
+        this.useMSE = false; // Используем сборку WAV, не MSE
+        this.audioElement = null;
+        this.status = 'waiting';
+        this.blobUrl = null;
+        this.onStatusChange = null;
+    }
 
-    this.mimeMap = {
-      mp3: "audio/mpeg",
-      wav: "audio/wav",
-      ogg: "audio/ogg",
-      m4a: "audio/mp4",
-      aac: "audio/aac",
-      flac: "audio/flac",
-      opus: "audio/ogg; codecs=opus",
-      webm: "audio/webm; codecs=opus",
-    };
+    start() {
+        this._reset();
+        this._updateStatus('active');
+        
+        this.socket = new WebSocket(this.wsUrl);
+        this.socket.binaryType = 'arraybuffer';
 
-    this.currentExt = "wav";
-    this.onStatus = null;
-    this.onFinish = null;
-    this.useMSE = true; // Флаг переключения режима
-    this.audioElement = null;
-  }
+        this.socket.onopen = () => {
+            console.log("WebSocket opened, sending init...");
+            this.socket.send(JSON.stringify({ 
+                type: 'init',  
+                sessionId: this.sessionId,
+                fileId: this.id,
+                fileName: this.file.name 
+            }));
+            this._streamUpload(this.file);
+        };
 
-  async start(file, audioElement) {
-    this._reset();
-    this.audioElement = audioElement;
+        this.socket.onmessage = (event) => {
+            if (typeof event.data === 'string') {
+                try {
+                    const msg = JSON.parse(event.data);
+                    console.log("Received message:", msg);
+                    if (msg && msg.extension) {
+                        this.currentExt = msg.extension.replace('.', '').toLowerCase();
+                        console.log("Extension received:", this.currentExt);
+                    } else if (msg && msg.sample_rate) {
+                        this.sampleRate = msg.sample_rate;
+                        this.channels = msg.channels;
+                        this.bitsPerSample = msg.bits_per_sample;
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse JSON:", event.data, e);
+                }
+            } else {
+                console.log("Received PCM chunk, size:", event.data.byteLength);
+                this._handleIncomingChunk(new Uint8Array(event.data));
+            }
+        };
 
-    this.socket = new WebSocket(this.wsUrl);
-    this.socket.binaryType = "arraybuffer";
+        this.socket.onclose = (event) => {
+            console.log("WebSocket closed, code:", event.code, "reason:", event.reason);
+            this._finalize();
+            this._updateStatus('finished');
+        };
 
-    this.socket.onopen = () => {
-      this.onStatus?.("active", "Соединение установлено. Отправка...");
-      this.socket.send(
-        JSON.stringify({
-          type: "init",
-          sessionId: this.sessionId,
-          fileName: file.name,
-        }),
-      );
-      this._streamUpload(file);
-    };
+        this.socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            this._updateStatus('error');
+        };
+    }
 
-    this.socket.onmessage = (event) => {
-      if (typeof event.data === "string") {
-        const msg = JSON.parse(event.data);
-        if (msg.extension) {
-          this.currentExt = msg.extension.replace(".", "").toLowerCase();
-          this._initMediaSource(audioElement);
+    attachToPlayer(audioElement) {
+        this.audioElement = audioElement;
+        
+        if (this.status === 'finished' && this.blobUrl && this.blobUrl !== 'null') {
+            console.log("Playing finished file from blob:", this.blobUrl);
+            audioElement.src = this.blobUrl;
+            audioElement.play().catch(e => console.warn("Play error:", e));
+            return;
         }
-      } else {
-        this._handleIncomingChunk(event.data);
-      }
-    };
-
-    this.socket.onclose = () => {
-      this._finalize();
-    };
-
-    this.socket.onerror = () => {
-      this.onStatus?.("error", "Ошибка связи с сервером");
-    };
-  }
-
-  _reset() {
-    this.collectedChunks = [];
-    this.queue = [];
-    if (this.mediaSource && this.mediaSource.readyState === "open") {
-      try {
-        this.mediaSource.endOfStream();
-      } catch (e) {}
     }
-  }
 
-  _initMediaSource(audioElement) {
-    const mimeType =
-      this.mimeMap[this.currentExt] || `audio/${this.currentExt}`;
-
-    // Проверяем поддержку MSE для данного формата
-    if (
-      this.useMSE &&
-      "MediaSource" in window &&
-      MediaSource.isTypeSupported(mimeType)
-    ) {
-      this.mediaSource = new MediaSource();
-      audioElement.src = URL.createObjectURL(this.mediaSource);
-
-      this.mediaSource.addEventListener("sourceopen", () => {
-        this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
-        this.sourceBuffer.addEventListener("updateend", () =>
-          this._pushQueue(),
-        );
-        this._flushQueue(); // Отправляем уже пришедшие чанки
-      });
-    } else {
-      console.warn(
-        `⚠️ MediaSource не поддерживает ${mimeType}. Переключаюсь на стандартное воспроизведение.`,
-      );
-      this.useMSE = false;
-      this.onStatus?.("active", "Буферизация аудио...");
-    }
-  }
-
-  _handleIncomingChunk(chunk) {
-    this.collectedChunks.push(chunk);
-
-    if (this.useMSE && this.sourceBuffer) {
-      if (!this.sourceBuffer.updating && this.queue.length === 0) {
-        this.sourceBuffer.appendBuffer(chunk);
-      } else {
-        this.queue.push(chunk);
-      }
-    }
-  }
-
-  _flushQueue() {
-    if (!this.sourceBuffer || this.sourceBuffer.updating) return;
-    while (this.queue.length > 0) {
-      this.sourceBuffer.appendBuffer(this.queue.shift());
-      if (this.sourceBuffer.updating) break;
-    }
-  }
-
-  _pushQueue() {
-    if (this.queue.length > 0 && !this.sourceBuffer.updating) {
-      this.sourceBuffer.appendBuffer(this.queue.shift());
-    }
-  }
-
-  async _streamUpload(file) {
-    const CHUNK_SIZE = 32768;
-    for (let i = 0; i < file.size; i += CHUNK_SIZE) {
-      const chunk = file.slice(i, i + CHUNK_SIZE);
-      const buffer = await chunk.arrayBuffer();
-      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        this.socket.send(buffer);
-      }
-      await new Promise((r) => setTimeout(r, 5));
-    }
-    this.socket.send(JSON.stringify({ type: "end" }));
-  }
-
-  _finalize() {
-    if (this.collectedChunks.length === 0) return;
-
-    if (this.useMSE && this.mediaSource) {
-      try {
-        if (this.mediaSource.readyState === "open") {
-          this.mediaSource.endOfStream();
+    _reset() {
+        this.collectedChunks = [];
+        this.queue = [];
+        if (this.mediaSource && this.mediaSource.readyState === 'open') {
+            try { this.mediaSource.endOfStream(); } catch(e) {}
         }
-      } catch (e) {}
-      this.onStatus?.("waiting", "Обработка завершена успешно");
-    } else {
-      // Fallback: собираем всё в Blob и воспроизводим стандартно
-      const mimeType = this.mimeMap[this.currentExt] || "audio/wav";
-      const blob = new Blob(this.collectedChunks, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-
-      this.audioElement.src = url;
-      this.onStatus?.("waiting", "Обработка завершена успешно");
-      this.onFinish?.(blob, this.currentExt);
     }
-  }
+
+    _handleIncomingChunk(chunk) {
+        this.collectedChunks.push(chunk);
+    }
+
+    async _streamUpload(file) {
+        const CHUNK_SIZE = 32768; 
+        let offset = 0;
+        while (offset < file.size) {
+            const chunk = file.slice(offset, offset + CHUNK_SIZE);
+            const buffer = await chunk.arrayBuffer();
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(buffer);
+            } else {
+                console.warn("WebSocket not open, stopping upload");
+                break;
+            }
+            offset += CHUNK_SIZE;
+            await new Promise(r => setTimeout(r, 5));
+        }
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({ type: 'end' }));
+            console.log("Sent end message");
+        }
+    }
+
+    _createWavBlob() {
+        const bytesPerSample = this.bitsPerSample / 8;
+        let totalSamples = 0;
+        for (const chunk of this.collectedChunks) {
+            totalSamples += chunk.byteLength / bytesPerSample;
+        }
+        
+        const dataSize = totalSamples * bytesPerSample;
+        const fileSize = 36 + dataSize;
+        const byteRate = this.sampleRate * this.channels * bytesPerSample;
+        const blockAlign = this.channels * bytesPerSample;
+        
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        
+        // RIFF chunk
+        this._writeString(view, 0, 'RIFF');
+        view.setUint32(4, fileSize, true);
+        this._writeString(view, 8, 'WAVE');
+        
+        // fmt chunk
+        this._writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, this.channels, true);
+        view.setUint32(24, this.sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, this.bitsPerSample, true);
+        
+        // data chunk
+        this._writeString(view, 36, 'data');
+        view.setUint32(40, dataSize, true);
+        
+        // Копируем PCM данные
+        let offset = 44;
+        for (const chunk of this.collectedChunks) {
+            const chunkView = new Uint8Array(chunk);
+            for (let i = 0; i < chunkView.length; i++) {
+                view.setUint8(offset + i, chunkView[i]);
+            }
+            offset += chunkView.length;
+        }
+        
+        return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    _writeString(view, offset, str) {
+        for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+    }
+
+    _finalize() {
+        if (this.collectedChunks.length === 0) {
+            console.warn("No chunks collected for file:", this.file.name);
+            return;
+        }
+
+        console.log("Finalizing, chunks count:", this.collectedChunks.length);
+        
+        // Создаём корректный WAV файл из PCM чанков
+        const blob = this._createWavBlob();
+        
+        if (this.blobUrl && this.blobUrl !== 'null') {
+            URL.revokeObjectURL(this.blobUrl);
+        }
+        
+        this.blobUrl = URL.createObjectURL(blob);
+        console.log("Blob URL created:", this.blobUrl);
+        
+        if (this.audioElement && this.blobUrl && this.blobUrl !== 'null') {
+            console.log("Setting audio src to blob URL");
+            this.audioElement.src = this.blobUrl;
+            this.audioElement.play().catch(e => console.warn("Auto-play error:", e));
+        }
+    }
+
+    _updateStatus(newStatus) {
+        this.status = newStatus;
+        console.log("Status updated:", newStatus);
+        if (this.onStatusChange) this.onStatusChange();
+    }
 }

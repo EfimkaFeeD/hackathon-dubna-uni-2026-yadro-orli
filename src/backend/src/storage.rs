@@ -1,37 +1,44 @@
-use crate::storage_client::StorageClient;
+use crate::storage_client::StorageHttpClient;
 use bytes::Bytes;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct StorageService {
-    client: Arc<StorageClient>,
+    client: Arc<StorageHttpClient>,
 }
 
 impl StorageService {
     pub fn new(base_url: &str) -> Self {
         Self {
-            client: Arc::new(StorageClient::new(base_url)),
+            client: Arc::new(StorageHttpClient::new(base_url)),
         }
     }
-
-    pub async fn save_chunk(&self, file_id: &str, packet_num: u32, data: &[u8]) -> Result<(), anyhow::Error> {
-        let key = format!("chunk_{}_{:06}", file_id, packet_num);
-        self.client.save(&key, Bytes::copy_from_slice(data)).await
+    
+    pub async fn save_chunk(&self, file_id: u64, key: &str, data: &[u8]) -> Result<(), anyhow::Error> {
+        self.client.put_chunk(file_id, key, Bytes::copy_from_slice(data)).await
     }
-
-    pub async fn load_all_chunks(&self, file_id: &str) -> Result<Vec<u8>, anyhow::Error> {
-        let mut result = Vec::new();
-        let mut packet_num = 1;
-        loop {
-            let key = format!("chunk_{}_{:06}", file_id, packet_num);
-            match self.client.get(&key).await? {
-                Some(data) => {
-                    result.extend_from_slice(&data);
-                    packet_num += 1;
-                }
-                None => break,
-            }
-        }
-        Ok(result)
+    
+    pub async fn load_chunk(&self, file_id: u64, key: &str) -> Result<Option<Bytes>, anyhow::Error> {
+        self.client.get_chunk(file_id, key).await
+    }
+    
+    pub async fn delete_chunk(&self, file_id: u64, key: &str) -> Result<bool, anyhow::Error> {
+        self.client.delete_chunk(file_id, key).await
+    }
+    
+    pub async fn delete_all_chunks(&self, file_id: u64) -> Result<bool, anyhow::Error> {
+        self.client.delete_all_chunks(file_id).await
+    }
+    
+    pub async fn list_chunks(&self, file_id: u64) -> Result<Vec<String>, anyhow::Error> {
+        self.client.list_chunks(file_id).await
+    }
+    
+    pub async fn list_all_files(&self) -> Result<Vec<u64>, anyhow::Error> {
+        self.client.list_all_files().await
+    }
+    
+    pub async fn health_check(&self) -> Result<bool, anyhow::Error> {
+        self.client.health_check().await
     }
 }

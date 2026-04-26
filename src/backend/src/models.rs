@@ -8,6 +8,35 @@ pub struct AudioSpec {
     pub is_signed: bool,
 }
 
+impl Default for AudioSpec {
+    fn default() -> Self {
+        Self {
+            sample_rate: 44100,
+            channels: 1,
+            bits_per_sample: 16,
+            is_signed: true,
+        }
+    }
+}
+
+impl AudioSpec {
+    pub fn is_mono(&self) -> bool {
+        self.channels == 1
+    }
+
+    pub fn bytes_per_sample(&self) -> usize {
+        (self.bits_per_sample as usize) / 8
+    }
+
+    pub fn bytes_per_second(&self) -> usize {
+        self.sample_rate as usize * self.channels as usize * self.bytes_per_sample()
+    }
+
+    pub fn chunk_size_for_ms(&self, ms: u32) -> usize {
+        (self.bytes_per_second() as f64 * (ms as f64 / 1000.0)) as usize
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ChunkType {
     Voice,

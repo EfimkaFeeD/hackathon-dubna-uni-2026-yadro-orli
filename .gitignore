@@ -2,4 +2,4 @@ src/backend/target/
 src/backend/.idea/
 src/backend/.env
 src/backend/src/data
- 
+src/backend/*.zip
