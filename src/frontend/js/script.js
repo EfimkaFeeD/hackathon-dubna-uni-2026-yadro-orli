@@ -5,28 +5,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const playbackRateSelect = document.getElementById('playbackRate');
 
     const WS_URL = "ws://localhost:8080/ws";
-    
     const SESSION_ID = "sess_" + Math.random().toString(36).substring(2, 15);
-    console.log('ID сессии:', SESSION_ID);
     
     const fileStreams = [];
 
-    // скорость воспроизведения
+    async function isValidAudio(file) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        try {
+            const headerBlob = file.slice(0, 512 * 1024); 
+            const arrayBuffer = await headerBlob.arrayBuffer();
+
+            await audioCtx.decodeAudioData(arrayBuffer);
+            return true; 
+        } catch (e) {
+            console.error("Валидация Web Audio API не удалась:", e);
+            return false; 
+        } finally {
+            await audioCtx.close();
+        }
+    }
+
     playbackRateSelect.addEventListener('change', (e) => {
         audioPlayer.playbackRate = parseFloat(e.target.value);
     });
 
-    audioInput.addEventListener('change', () => {
+    audioInput.addEventListener('change', async () => {
         const files = Array.from(audioInput.files);
         if (files.length === 0) return;
 
-        files.forEach(file => {
+        for (const file of files) {
+            console.log(`Проверка файла: ${file.name}`);
+            
+            const isValid = await isValidAudio(file);
+
+            if (!isValid) {
+                alert(`Файл "${file.name}" поврежден или не является поддерживаемым аудио.`);
+                continue;
+            }
+
             const streamer = new AudioStreamer(WS_URL, SESSION_ID, file);
             fileStreams.push(streamer);
             
             streamer.onStatusChange = () => renderFileList();
             streamer.start(); 
-        });
+        }
 
         audioInput.value = '';
         renderFileList();
@@ -34,7 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderFileList() {
         fileListEl.innerHTML = '';
-        
         fileStreams.forEach(streamer => {
             const li = document.createElement('li');
             li.className = 'file-item';
@@ -80,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             actionsDiv.appendChild(playBtn);
             actionsDiv.appendChild(downloadBtn);
-
             li.appendChild(infoDiv);
             li.appendChild(actionsDiv);
             fileListEl.appendChild(li);
