@@ -74,15 +74,15 @@ select {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    flex: 1;           /* Тянется на всю ширину */
-    min-width: 0;      /* Важно для работы переноса текста */
+    flex: 1;           
+    min-width: 0;      
 }
 
 .file-name {
     font-size: 0.9rem;
     font-weight: 600;
     color: rgb(31, 41, 55);
-    word-break: break-all; /* Текст больше не вылезает за рамки */
+    word-break: break-all; 
 }
 
 .status-badge {
@@ -103,7 +103,7 @@ select {
 .file-actions {
     display: flex;
     gap: 6px;
-    flex-shrink: 0; /* Кнопки не сжимаются */
+    flex-shrink: 0; 
 }
 
 button {
