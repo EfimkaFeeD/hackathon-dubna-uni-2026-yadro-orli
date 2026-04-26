@@ -4,11 +4,12 @@
 
 cmake_minimum_required(VERSION 3.25)
 
-project(ffmpeg_processor C CXX)
+# 1. ВАЖНО: Имя проекта должно совпадать с тем, что ожидает Dockerfile
+project(podcast_silence_remover C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 
-option(BUILD_SHARED_LIB "Build as shared library instead of executable" OFF)
+option(BUILD_SHARED_LIB "Build as shared library instead of executable" ON)
 
 find_library(FVAD_LIB NAMES fvad REQUIRED)
 find_library(AVFORMAT_LIB NAMES avformat REQUIRED)
@@ -31,10 +32,11 @@ set(MAIN_SOURCES "src/main.cpp")
 if (BUILD_SHARED_LIB)
     add_library(${PROJECT_NAME} SHARED ${LIB_SOURCES})
 
-    option(BUILD_TEST_EXECUTABLE "Build test executable linking to the shared library" ON)
+    option(BUILD_TEST_EXECUTABLE "Build test executable linking to the shared library" OFF)
+
     if (BUILD_TEST_EXECUTABLE)
         add_executable(silence_test ${MAIN_SOURCES})
-        target_link_libraries(silence_test PRIVATE ${PROJECT_NAME})
+        target_link_libraries(silence_test PRIVATE ${PROJECT_NAME} ${AVUTIL_LIB} ${AVFORMAT_LIB} ${AVCODEC_LIB})
     endif ()
 else ()
     add_executable(${PROJECT_NAME} ${LIB_SOURCES} ${MAIN_SOURCES})
