@@ -24,7 +24,7 @@ struct AudioSpec {
   bool is_float;
 };
 
-struct PluginResult {
+struct FfmpegResult {
   uint32_t packet_num;
   uint8_t chunk_type;
 };
@@ -33,7 +33,7 @@ class FfmpegProcessor {
  public:
   explicit FfmpegProcessor(const AudioSpec& inputSpec, float marginDb = kDefaultMarginDb, int vadMode = kDefaultVADMode,
                            int noiseWindowMs = kNoiseWindowTargetMs);
-  PluginResult process(uint32_t packet_num, const uint8_t* buffer, size_t buffer_len);
+  FfmpegResult process(uint32_t packet_num, const uint8_t* buffer, size_t buffer_len);
  private:
   int inputSampleRate_;
   int frameSamples_;

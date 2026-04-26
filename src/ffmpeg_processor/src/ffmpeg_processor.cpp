@@ -45,7 +45,7 @@ FfmpegProcessor::FfmpegProcessor(const AudioSpec& inputSpec, float marginDb, int
   av_channel_layout_default(&inputChLayout_, inputSpec.is_mono ? 1 : 2);
 }
 
-PluginResult
+FfmpegResult
 FfmpegProcessor::process(uint32_t packet_num, const uint8_t* buffer, size_t buffer_len) {
   size_t bytesPerSample = av_get_bytes_per_sample(inputFormat_);
   size_t expectedBytes  = frameSamples_ * bytesPerSample * inputChLayout_.nb_channels;

@@ -80,7 +80,7 @@ main(int argc, char* argv[]) {
       continue;
     }
 
-    PluginResult res = processor.process(packetNum, rawBuffer.data(), bufSize);
+    FfmpegResult res = processor.process(packetNum, rawBuffer.data(), bufSize);
 
     ++tagCounts[res.chunk_type];
     ++packetNum;
