@@ -1,8 +1,13 @@
 set windows-powershell := true
+
 os_type  := os()
 is_win   := if os_type == "windows" { "true" } else { "false" }
 
-mkdir    := if is_win == "true" { "New-Item -ItemType Directory -Force" } else { "mkdir -p" }
+mkdir_cmd := if is_win == "true" { "New-Item -ItemType Directory -Force" } else { "mkdir -p" }
+dirs      := if is_win == "true" { "data, storage/disk, shared_plugins" } else { "data storage/disk shared_plugins" }
+
+null_redir := if is_win == "true" { "| Out-Null" } else { "> /dev/null 2>&1" }
+
 cp_env   := if is_win == "true" { "if (!(Test-Path .env)) { Copy-Item .env.example .env }" } else { "cp -n .env.example .env || true" }
 rm_rf    := if is_win == "true" { "Remove-Item -Recurse -Force" } else { "rm -rf" }
 
@@ -12,7 +17,7 @@ default:
 setup:
     @echo "[INFO] Starting initialization for OS: {{ os_type }}"
     @echo "[1/2] Creating required directories..."
-    @{{ mkdir }} data, storage/disk, shared_plugins > {{ if is_win == "true" { "$null" } else { "/dev/null" } }}
+    @{{ mkdir_cmd }} {{ dirs }} {{ null_redir }}
     @echo "[2/2] Checking environment configuration (.env)..."
     @{{ cp_env }}
     @echo "[DONE] Project initialization completed."
@@ -53,5 +58,4 @@ down:
 
 clean: down
     @echo "[INFO] Starting workspace cleanup..."
-    @{{ rm_rf }} data/*, storage/disk/*, shared_plugins/*
-    @echo "[DONE] Workspace is now clean."
+    @{{ rm_rf }} {{ if is_win == "true" { "data/*, storage/disk/*
