@@ -1,6 +1,7 @@
 #ifndef PODCAST_SILENCE_REMOVER_SRC_AUDIO_FILE_TO_FFMPEG_FORMAT_HPP
 #define PODCAST_SILENCE_REMOVER_SRC_AUDIO_FILE_TO_FFMPEG_FORMAT_HPP
 
+#include <libavutil/samplefmt.h>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -18,6 +19,19 @@ class AudioFileToFFmpegFormat {
   AudioFileToFFmpegFormat& operator=(const AudioFileToFFmpegFormat&) = delete;
 
   AVFrame* getNextFrame();
+
+  [[nodiscard]] int getSampleRate() const {
+    return (codecCtx_ != nullptr) ? codecCtx_->sample_rate : 0;
+  }
+  [[nodiscard]] int getChannels() const {
+    return (codecCtx_ != nullptr) ? codecCtx_->ch_layout.nb_channels : 0;
+  }
+  [[nodiscard]] AVSampleFormat getSampleFormat() const {
+    return (codecCtx_ != nullptr) ? codecCtx_->sample_fmt : AV_SAMPLE_FMT_NONE;
+  }
+  [[nodiscard]] bool isPlanar() const {
+    return ((codecCtx_ != nullptr) ? av_sample_fmt_is_planar(codecCtx_->sample_fmt) : 0) != 0;
+  }
  private:
   AVFormatContext* fmtCtx_  = nullptr;
   AVCodecContext* codecCtx_ = nullptr;
