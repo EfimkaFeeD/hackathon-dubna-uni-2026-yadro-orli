@@ -1,6 +1,7 @@
 #ifndef PODCAST_SILENCE_REMOVER_SRC_AUDIO_CLASSIFIER_HPP
 #define PODCAST_SILENCE_REMOVER_SRC_AUDIO_CLASSIFIER_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include "consts.h"
@@ -17,16 +18,14 @@ class AudioClassifier {
 
   explicit AudioClassifier(int bufferFrames = kSegmenterBufferFrames);
 
-  // Process a frame and return its tag (0‑4).
   Tag processFrame(bool isVoice);
 
-  // Access the last bufferFrames tags (for external analysis).
   const std::deque<Tag>& getTagBuffer() const {
     return history_;
   }
  private:
-  std::deque<Tag> history_; // circular buffer of assigned tags
-  size_t maxFrames_;        // maximum size of the buffer
+  std::deque<Tag> history_;
+  size_t maxFrames_;
 };
 
 #endif // PODCAST_SILENCE_REMOVER_SRC_AUDIO_CLASSIFIER_HPP
