@@ -39,23 +39,18 @@ impl AudioSpec {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ChunkType {
-    Voice,
-    Silence,
-    WordEnd,
-    SentenceEnd,
-    ParagraphEnd,
+    Silence = 0,
+    Voice = 1,
+    Unknown = 255,
 }
 
-#[derive(Debug, Clone)]
-pub struct PluginRequest {
-    pub packet_num: u32,
-    pub buffer: Vec<u8>,
-    pub spec: AudioSpec,
-}
-
-#[derive(Debug, Clone)]
-pub struct PluginResponse {
-    pub packet_num: u32,
-    pub chunk_type: ChunkType,
-    pub processed_buffer: Vec<u8>,
+// Преобразование из C++ uint8_t в Rust Enum
+impl From<u8> for ChunkType {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => ChunkType::Silence,
+            1 => ChunkType::Voice,
+            _ => ChunkType::Unknown,
+        }
+    }
 }

@@ -1,18 +1,11 @@
-cmake_minimum_required(VERSION 3.28)
-project(hacaton)
+cmake_minimum_required(VERSION 3.10)
+project(storage_service)
 
 set(CMAKE_CXX_STANDARD 17)
-set(VCPKG_ROOT "C:/vcpkg")
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-file(GLOB_RECURSE hakaton "src/*cpp")
-include_directories(
-        ${CMAKE_CURRENT_SOURCE_DIR}/libs
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${VCPKG_ROOT}/installed/x64-windows/include
-)
-link_directories(${VCPKG_ROOT}/installed/x64-windows/lib)
-list(APPEND hakaton main.cpp)
+include_directories(src)
 
-add_executable(hacaton ${hakaton})
+file(GLOB_RECURSE SOURCES "src/*.cpp" "main.cpp")
 
-target_link_libraries(hacaton ws2_32)
+add_executable(storage_service ${SOURCES})

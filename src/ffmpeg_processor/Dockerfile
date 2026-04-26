@@ -30,12 +30,11 @@ workdir /build
 
 copy . .
 
-run cmake . && cmake
-
+run cmake . && cmake --build . && ls -la /build/*.so
 
 from alpine:3.19
 workdir /output
-#после build добавить .so
+
 copy --from=builder /build/libpodcast_silence_remover.so .
 
 cmd cp libpodcast_silence_remover.so /shared_output

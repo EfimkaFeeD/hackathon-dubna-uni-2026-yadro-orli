@@ -2,6 +2,7 @@ use sqlx::SqlitePool;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+
 pub async fn init_pool(url: &str) -> sqlx::Result<SqlitePool> {
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::str::FromStr;
@@ -12,7 +13,7 @@ pub async fn init_pool(url: &str) -> sqlx::Result<SqlitePool> {
     let pool = SqlitePoolOptions::new()
         .connect_with(options)
         .await?;
-
+    
     sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS sessions (
@@ -45,7 +46,7 @@ pub async fn init_pool(url: &str) -> sqlx::Result<SqlitePool> {
     )
     .execute(&pool)
     .await?;
-
+    
     Ok(pool)
 }
 
@@ -53,8 +54,8 @@ pub async fn upsert_session(pool: &SqlitePool, session_id: &str) -> sqlx::Result
     let now = OffsetDateTime::now_utc().unix_timestamp();
     sqlx::query(
         r#"
-        INSERT INTO sessions (id, created_at, last_active)
-        VALUES (?, ?, ?)
+        INSERT INTO sessions (id, created_at, last_active) 
+        VALUES (?, ?, ?) 
         ON CONFLICT(id) DO UPDATE SET last_active = ?
         "#,
     )
@@ -76,7 +77,7 @@ pub async fn create_audio_file(
     let now = OffsetDateTime::now_utc().unix_timestamp();
     sqlx::query(
         r#"
-        INSERT INTO audio_files (id, session_id, filename, status, created_at)
+        INSERT INTO audio_files (id, session_id, filename, status, created_at) 
         VALUES (?, ?, 'audio', 'processing', ?)
         "#,
     )
@@ -98,7 +99,7 @@ pub async fn log_chunk(
     let now = OffsetDateTime::now_utc().unix_timestamp();
     sqlx::query(
         r#"
-        INSERT INTO audio_chunks (file_id, packet_num, chunk_type, size_bytes, created_at)
+        INSERT INTO audio_chunks (file_id, packet_num, chunk_type, size_bytes, created_at) 
         VALUES (?, 0, ?, 0, ?)
         "#,
     )
@@ -111,6 +112,6 @@ pub async fn log_chunk(
 }
 
 pub async fn finish_audio_file(_pool: &SqlitePool, file_id: &str) -> sqlx::Result<()> {
-    tracing::info!("Файл {} завершён", file_id);
+    tracing::info!("✅ Файл {} завершён", file_id);
     Ok(())
 }
