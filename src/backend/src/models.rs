@@ -41,6 +41,9 @@ impl AudioSpec {
 pub enum ChunkType {
     Silence = 0,
     Voice = 1,
+    WordEnd = 2,
+    SentenceEnd = 3,
+    ParagraphEnd = 4,
     Unknown = 255,
 }
 
@@ -49,6 +52,9 @@ impl From<u8> for ChunkType {
         match val {
             0 => ChunkType::Silence,
             1 => ChunkType::Voice,
+            2 => ChunkType::WordEnd,
+            3 => ChunkType::SentenceEnd,
+            4 => ChunkType::ParagraphEnd,
             _ => ChunkType::Unknown,
         }
     }

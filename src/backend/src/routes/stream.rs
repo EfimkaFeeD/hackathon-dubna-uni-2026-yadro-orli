@@ -1,73 +1,169 @@
 use axum::extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State};
 use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
+use rand::Rng;
 use crate::AppState;
-use crate::plugin::AudioProcessor;
+use crate::{db, plugin};
+use crate::audio_metadata;
 use crate::models::{AudioSpec, ChunkType};
 
+const CHUNK_DURATION_MS: u32 = 10;
 
 pub async fn handler(State(state): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(socket: WebSocket, _state: AppState) {
-    tracing::info!("WebSocket подключён");
+fn get_pause_ms(chunk_type: ChunkType) -> u32 {
+    let base_ms = match chunk_type {
+        ChunkType::WordEnd => 75,
+        ChunkType::SentenceEnd => 300,
+        ChunkType::ParagraphEnd => 600,
+        _ => 0,
+    };
+    if base_ms == 0 { return 0; }
+    let mut rng = rand::thread_rng();
+    let variation = rng.gen_range(0.9..1.1);
+    (base_ms as f64 * variation) as u32
+}
+
+fn get_chunk_size_bytes(spec: &AudioSpec, duration_ms: u32) -> usize {
+    let bytes_per_second = spec.sample_rate as usize
+        * spec.channels as usize
+        * (spec.bits_per_sample as usize / 8);
+    (bytes_per_second as f64 * (duration_ms as f64 / 1000.0)) as usize
+}
+
+fn generate_silence(spec: &AudioSpec, duration_ms: u32) -> Vec<u8> {
+    let size = get_chunk_size_bytes(spec, duration_ms);
+    vec![0; size]
+}
+
+async fn handle_socket(socket: WebSocket, state: AppState) {
+    tracing::info!("🔌 WebSocket подключён");
     let (mut tx, mut rx) = socket.split();
 
-    let mut received_init = false;
+    let mut session_id = String::new();
+    let mut file_id = String::new();
+    let mut file_buffer = Vec::new();
+    let mut metadata_received = false;
+    let mut spec = AudioSpec::default();
+    let mut chunk_size_10ms: usize = 0;
+    let mut pending_silence_ms: u32 = 0;
     let mut packet_counter: u32 = 0;
 
-    let mut processor: Option<AudioProcessor> = None;
-    let spec = AudioSpec::default();
+    // Экземпляр C++ плагина для текущего аудио-потока
+    let mut processor: Option<plugin::AudioProcessor> = None;
 
     while let Some(Ok(msg)) = rx.next().await {
         match msg {
             Message::Text(text) if text.contains(r#""type":"init""#) => {
-                tracing::info!("Получен Init: {}", text);
-                received_init = true;
+                let json: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+                let incoming_session = json["sessionId"].as_str().unwrap_or("anon");
+                session_id = incoming_session.to_string();
 
-
-                match AudioProcessor::new(&spec) {
-                    Ok(p) => processor = Some(p),
-                    Err(e) => tracing::error!("Ошибка загрузки плагина: {}", e),
-                }
-
-                let response = r#"{"extension":".wav"}"#;
-                if tx.send(Message::Text(response.into())).await.is_err() {
-                    break;
-                }
+                let _ = db::upsert_session(&state.db, &session_id).await;
+                let _ = tx.send(Message::Text(r#"{"extension":".wav"}"#.into())).await;
             }
+
             Message::Binary(data) => {
-                if !received_init {
-                    continue;
-                }
+                if !metadata_received {
+                    file_buffer.extend_from_slice(&data);
 
-                packet_counter += 1;
+                    if let Ok(metadata) = audio_metadata::get_audio_metadata(&file_buffer) {
+                        spec = AudioSpec {
+                            sample_rate: metadata.sample_rate,
+                            channels: metadata.channels,
+                            bits_per_sample: metadata.bits_per_sample,
+                            is_signed: true,
+                        };
+                        chunk_size_10ms = get_chunk_size_bytes(&spec, CHUNK_DURATION_MS);
 
-                if let Some(ref proc) = processor {
-                    match proc.process(packet_counter, &data) {
-                        Ok(ChunkType::Voice) => {
-                            if tx.send(Message::Binary(data)).await.is_err() {
-                                break;
+                        // Инициализируем C++ плагин для этого клиента
+                        match plugin::AudioProcessor::new(&spec) {
+                            Ok(p) => processor = Some(p),
+                            Err(e) => tracing::error!("❌ Ошибка загрузки плагина: {}", e),
+                        }
+
+                        if let Ok(fid) = db::create_audio_file(&state.db, &session_id, "audio").await {
+                            file_id = fid;
+                        }
+                        metadata_received = true;
+                    }
+                } else if chunk_size_10ms > 0 {
+                    let mut offset = 0;
+
+                    // Обрабатываем все полные чанки по 10мс
+                    while offset + chunk_size_10ms <= data.len() {
+                        let chunk_data = data[offset..offset + chunk_size_10ms].to_vec();
+                        offset += chunk_size_10ms;
+                        packet_counter += 1;
+
+                        // 1. Получаем тип чанка из C++
+                        let chunk_type = if let Some(ref proc) = processor {
+                            proc.process(packet_counter, &chunk_data).unwrap_or(ChunkType::Voice)
+                        } else {
+                            ChunkType::Voice // Если плагин упал, пропускаем голос как есть
+                        };
+
+                        let chunk_type_str = format!("{:?}", chunk_type).to_lowercase();
+                        let _ = db::log_chunk(&state.db, &file_id, packet_counter, &chunk_type_str, chunk_data.len()).await;
+
+                        // 2. Логика генерации пауз
+                        match chunk_type {
+                            ChunkType::Silence | ChunkType::Unknown => continue, // Вырезаем оригинальную тишину
+                            ChunkType::Voice => {
+                                // Если накопилась пауза - сначала отправляем её
+                                if pending_silence_ms > 0 {
+                                    let silence = generate_silence(&spec, pending_silence_ms);
+                                    if tx.send(Message::Binary(silence.into())).await.is_err() {
+                                        break;
+                                    }
+                                    pending_silence_ms = 0;
+                                }
+                                // Затем отправляем сам голос (оригинальные байты chunk_data)
+                                if tx.send(Message::Binary(chunk_data.into())).await.is_err() {
+                                    break;
+                                }
+                            }
+                            ChunkType::WordEnd | ChunkType::SentenceEnd | ChunkType::ParagraphEnd => {
+                                // Запоминаем, какой длины паузу нужно вставить перед следующим словом
+                                pending_silence_ms = get_pause_ms(chunk_type);
                             }
                         }
-                        Ok(ChunkType::Silence) => {
+                    }
 
-                        }
-                        _ => {
-                            let _ = tx.send(Message::Binary(data)).await;
+                    // Обработка "хвоста" буфера (если он меньше 10мс)
+                    if offset < data.len() {
+                        let remaining = data[offset..].to_vec();
+                        packet_counter += 1;
+
+                        let chunk_type = if let Some(ref proc) = processor {
+                            proc.process(packet_counter, &remaining).unwrap_or(ChunkType::Voice)
+                        } else {
+                            ChunkType::Voice
+                        };
+
+                        if matches!(chunk_type, ChunkType::Voice) {
+                            if pending_silence_ms > 0 {
+                                let silence = generate_silence(&spec, pending_silence_ms);
+                                let _ = tx.send(Message::Binary(silence.into())).await;
+                                pending_silence_ms = 0;
+                            }
+                            let _ = tx.send(Message::Binary(remaining.into())).await;
+                        } else if matches!(chunk_type, ChunkType::WordEnd | ChunkType::SentenceEnd | ChunkType::ParagraphEnd) {
+                            pending_silence_ms = get_pause_ms(chunk_type);
                         }
                     }
-                } else {
-                    let _ = tx.send(Message::Binary(data)).await;
                 }
             }
+
             Message::Text(text) if text.contains(r#""type":"end""#) => {
-                tracing::info!("🏁 Стрим завершён. Обработано пакетов: {}", packet_counter);
+                let _ = db::finish_audio_file(&state.db, &file_id).await;
+                tracing::info!("🏁 Стрим завершён. Файл: {}, обработано пакетов: {}", file_id, packet_counter);
                 break;
             }
             _ => {}
         }
     }
-    tracing::info!("WebSocket отключён");
+    tracing::info!("👋 WebSocket отключён");
 }
