@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Streamer Pro</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <h1>Стриминг аудио</h1>
+        <p id="status" class="status-waiting">Ожидание файла...</p>
+    </header>
+
+    <main class="controls">
+        <div class="upload-section">
+            <label for="audioInput" class="file-label">Выберите аудиофайл:</label>
+            <input type="file" id="audioInput" accept="audio/*">
+            <button id="startBtn" class="primary-button">Запустить обработку</button>
+        </div>
+
+        <div class="player-section">
+            <label>Предпрослушивание потока:</label>
+            <audio id="audioPlayer" controls></audio>
+        </div>
+
+        <div class="result-section" id="resultSection" style="display: none;">
+            <div class="divider"></div>
+            <p>Обработка завершена</p>
+            <a id="downloadLink" class="download-button">Скачать готовый файл</a>
+        </div>
+    </main>
+</div>
+
+<script src="js/streamer.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

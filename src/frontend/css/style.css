@@ -1,0 +1,141 @@
+:root {
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --bg-color: #f3f4f6;
+    --card-bg: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --status-wait: #e5e7eb;
+    --status-active: #dcfce7;
+    --status-error: #fee2e2;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.app-container {
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 420px;
+}
+
+header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    text-align: center;
+}
+
+#status {
+    font-size: 0.875rem;
+    padding: 0.6rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.status-waiting { background: var(--status-wait); color: var(--text-muted); }
+.status-active { 
+    background: var(--status-active); 
+    color: #166534; 
+    animation: pulse 2s infinite;
+}
+.status-error { background: var(--status-error); color: #991b1b; }
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.upload-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.file-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+input[type="file"] {
+    font-size: 0.9rem;
+}
+
+.primary-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.primary-button:hover {
+    background-color: var(--primary-hover);
+}
+
+/* Плеер */
+.player-section label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+audio {
+    width: 100%;
+    height: 40px;
+}
+
+.result-section {
+    text-align: center;
+    animation: slideUp 0.4s ease-out;
+}
+
+.divider {
+    height: 1px;
+    background: #e5e8eb;
+    margin-bottom: 1rem;
+}
+
+.download-button {
+    display: block;
+    background-color: #059669;
+    color: white;
+    text-decoration: none;
+    padding: 0.8rem;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-top: 0.5rem;
+    transition: opacity 0.2s;
+}
+
+.download-button:hover {
+    opacity: 0.9;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
