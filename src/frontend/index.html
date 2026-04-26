@@ -7,33 +7,45 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <div class="app-container">
+        <header>
+        </header>
 
-<div class="app-container">
-    <header>
-        <p id="status" class="status-waiting">Ожидание файла</p>
-    </header>
+        <main class="controls">
+            <div class="upload-section">
+                <label for="audioInput" class="file-label">Добавить файлы:</label>
+                <input type="file" id="audioInput" accept="audio/*" multiple>
+            </div>
 
-    <main class="controls">
-        <div class="upload-section">
-            <label for="audioInput" class="file-label">Выберите аудиофайл:</label>
-            <input type="file" id="audioInput" accept="audio/*">
-            <button id="startBtn" class="primary-button">Запустить обработку</button>
-        </div>
+            <div class="player-section">
+                <h3>Сейчас играет:</h3>
+                <audio id="audioPlayer" controls></audio>
+                <div class="speed-control">
+                    <label>Скорость воспроизведения:</label>
+                    <select id="playbackRate">
+                        <option value="0.5">0.5x</option>
+                        <option value="1.0" selected>1.0x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2.0">2.0x</option>
+                    </select>
+                </div>
+            </div>
 
-        <div class="player-section">
-            <label>Предпрослушивание потока:</label>
-            <audio id="audioPlayer" controls></audio>
-        </div>
+            <div class="file-list-section">
+                <h3>Мои файлы:</h3>
+                <ul id="fileList" class="file-list"></ul>
+            </div>
+        </main>
 
-        <div class="result-section" id="resultSection" style="display: none;">
-            <div class="divider"></div>
-            <p>Обработка завершена</p>
-            <a id="downloadLink" class="download-button">Скачать готовый файл</a>
-        </div>
-    </main>
-</div>
+        <footer>
+            <span class="badge">WebSocket + Rust + MediaSource</span>
+            <span class="badge">Удаление пауз</span>
+            <span class="badge">Анонимные сессии</span>
+        </footer>
+    </div>
 
-<script src="js/streamer.js"></script>
-<script src="js/script.js"></script>
+    <script src="js/streamer.js"></script>
+    <script src="js/script.js"></script>
 </body>
 </html>

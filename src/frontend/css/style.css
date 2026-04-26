@@ -1,13 +1,11 @@
 :root {
-    --primary-color:rgb(153, 153, 153);
-    --primary-hover:rgb(128, 128, 128);
-    --bg-color: #f3f4f6;
-    --card-bg: #ffffff;
-    --text-main: #1f2937;
-    --text-muted: #6b7280;
-    --status-wait: #e5e7eb;
-    --status-active: #dcfce7;
-    --status-error: #f6f0f0;
+    --primary-color: rgb(153, 153, 153);
+    --primary-hover: rgb(128, 128, 128);
+    --bg-color: rgb(243, 244, 246);
+    --card-bg: rgb(255, 255, 255);
+    --text-main: rgb(31, 41, 55);
+    --text-muted: rgb(107, 114, 128);
+    --border-color: rgb(209, 213, 219);
 }
 
 body {
@@ -16,115 +14,127 @@ body {
     margin: 0;
     display: flex;
     justify-content: center;
-    align-items: center;
-    height: 100vh;
+    padding-top: 5vh;
+    font-family: system-ui, -apple-system, sans-serif;
 }
 
 .app-container {
     padding: 2rem;
     width: 100%;
-    max-width: 420px;
+    max-width: 450px;
+    border-radius: 12px;
 }
 
-#status {
-    font-size: 0.875rem;
-    padding: 0.6rem;
-    border-radius: 8px;
-    text-align: center;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
 
-.status-active { 
-    background: var(--status-active); 
-    color: #166534; 
-    animation: pulse 2s infinite;
-}
-.status-error { background: var(--status-error); color: #991b1b; }
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.7; }
-    100% { opacity: 1; }
+.subtitle { 
+    color: var(--text-muted); 
+    font-size: 0.85rem; 
+    margin-bottom: 2rem;
 }
 
 .controls {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    margin-top: 1.5rem;
 }
 
-.upload-section {
+.upload-section, .player-section, .file-list-section {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
 }
 
-.file-label {
+.file-label, label {
     font-size: 0.9rem;
-    color: rgb(128, 128, 128);
-}
-
-input[type="file"] {
-    font-size: 0.9rem;
-}
-
-.primary-button {
-    background-color: rgb(153, 153, 153);
-    color: white;
-    border: none;
-    padding: 0.8rem;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.primary-button:hover {
-    background-color: rgb(128, 128, 128);
-}
-
-.player-section label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 500;
+    color: var(--text-muted);
 }
 
 audio {
     width: 100%;
-    height: 40px;
+    height: 35px;
 }
 
-.result-section {
-    text-align: center;
-    animation: slideUp 0.4s ease-out;
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
 }
 
-.divider {
-    height: 1px;
-    background: #e5e8eb;
-    margin-bottom: 1rem;
+select {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px;
 }
 
-.download-button {
-    display: block;
-    background-color: #2d7961;
+.file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid rgb(238, 238, 238);
+    padding-top: 1rem;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgb(249, 249, 249);
+}
+
+.file-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.badge-active { color: rgb(22, 101, 52); font-weight: bold; }
+.badge-finished { color: var(--primary-color); }
+.badge-error { color: rgb(103, 22, 22); }
+
+.file-actions {
+    display: flex;
+    gap: 8px;
+}
+
+button {
+    background-color: var(--primary-color);
     color: white;
-    text-decoration: none;
-    padding: 0.8rem;
-    border-radius: 8px;
-    font-weight: 600;
-    margin-top: 0.5rem;
-    transition: opacity 0.2s;
+    border: none;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
-.download-button:hover {
-    opacity: 0.9;
+button:hover:not(:disabled) {
+    background-color: var(--primary-hover);
 }
 
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+button:disabled {
+    background-color: rgb(229, 231, 235);
+    color: rgb(161, 161, 161);
+    cursor: not-allowed;
+}
+
+.btn-play {
+    background-color: rgb(243, 244, 246);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
 }

@@ -1,42 +1,99 @@
 document.addEventListener('DOMContentLoaded', () => {
     const audioInput = document.getElementById('audioInput');
-    const startBtn = document.getElementById('startBtn');
     const audioPlayer = document.getElementById('audioPlayer');
-    const statusLabel = document.getElementById('status');
-    const resultSection = document.getElementById('resultSection');
-    const downloadLink = document.getElementById('downloadLink');
+    const fileListEl = document.getElementById('fileList');
+    const playbackRateSelect = document.getElementById('playbackRate');
 
+    const WS_URL = "ws://localhost:8080/ws";
+    
+    const SESSION_ID = "sess_" + Math.random().toString(36).substring(2, 15);
+    console.log('ID сессии:', SESSION_ID);
+    
+    const fileStreams = [];
 
-    const WS_URL = "ws://localhost:8080";
-
-    const streamer = new AudioStreamer(WS_URL);
-
-    streamer.onStatus = (type, message) => {
-        statusLabel.textContent = message;
-        statusLabel.className = `status-${type}`; // active, waiting, error
-    };
-
-    streamer.onFinish = (blob, extension) => {
-        streamer.onStatus('waiting', 'Обработка завершена успешно');
-        
-        const url = URL.createObjectURL(blob);
-        downloadLink.href = url;
-        downloadLink.download = `processed_audio_${Date.now()}.${extension}`;
-        
-        resultSection.style.display = 'block';
-    };
-
-
-    startBtn.addEventListener('click', () => {
-        const file = audioInput.files[0];
-        if (!file) {
-            alert("Пожалуйста, выберите аудиофайл");
-            return;
-        }
-
-
-        resultSection.style.display = 'none';
-        
-        streamer.start(file, audioPlayer);
+    // скорость воспроизведения
+    playbackRateSelect.addEventListener('change', (e) => {
+        audioPlayer.playbackRate = parseFloat(e.target.value);
     });
+
+    audioInput.addEventListener('change', () => {
+        const files = Array.from(audioInput.files);
+        if (files.length === 0) return;
+
+        files.forEach(file => {
+            const streamer = new AudioStreamer(WS_URL, SESSION_ID, file);
+            fileStreams.push(streamer);
+            
+            streamer.onStatusChange = () => renderFileList();
+            streamer.start(); 
+        });
+
+        audioInput.value = '';
+        renderFileList();
+    });
+
+    function renderFileList() {
+        fileListEl.innerHTML = '';
+        
+        fileStreams.forEach(streamer => {
+            const li = document.createElement('li');
+            li.className = 'file-item';
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'file-info';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = streamer.file.name;
+            
+            const statusSpan = document.createElement('span');
+            statusSpan.className = `status-badge badge-${streamer.status}`;
+            statusSpan.textContent = getStatusText(streamer.status);
+
+            infoDiv.appendChild(nameSpan);
+            infoDiv.appendChild(statusSpan);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'file-actions';
+
+            const playBtn = document.createElement('button');
+            playBtn.className = 'btn-play';
+            playBtn.textContent = 'Слушать';
+            playBtn.onclick = () => {
+                streamer.attachToPlayer(audioPlayer);
+                audioPlayer.playbackRate = parseFloat(playbackRateSelect.value);
+            };
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn-download';
+            downloadBtn.textContent = 'Скачать';
+            downloadBtn.disabled = streamer.status !== 'finished';
+            
+            if (streamer.status === 'finished') {
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = streamer.blobUrl;
+                    a.download = `processed_${streamer.file.name}`;
+                    a.click();
+                };
+            }
+
+            actionsDiv.appendChild(playBtn);
+            actionsDiv.appendChild(downloadBtn);
+
+            li.appendChild(infoDiv);
+            li.appendChild(actionsDiv);
+            fileListEl.appendChild(li);
+        });
+    }
+
+    function getStatusText(status) {
+        const map = {
+            'waiting': 'Ожидание',
+            'active': 'Обработка',
+            'finished': 'Готово',
+            'error': 'Ошибка'
+        };
+        return map[status] || status;
+    }
 });
