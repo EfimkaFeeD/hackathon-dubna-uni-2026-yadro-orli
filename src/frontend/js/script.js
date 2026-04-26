@@ -6,51 +6,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const WS_URL = "ws://localhost:8080/ws";
     const SESSION_ID = "sess_" + Math.random().toString(36).substring(2, 15);
-    
     const fileStreams = [];
 
-    async function isValidAudio(file) {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
-        try {
-            const headerBlob = file.slice(0, 512 * 1024); 
-            const arrayBuffer = await headerBlob.arrayBuffer();
-
-            await audioCtx.decodeAudioData(arrayBuffer);
-            return true; 
-        } catch (e) {
-            console.error("Валидация Web Audio API не удалась:", e);
-            return false; 
-        } finally {
-            await audioCtx.close();
-        }
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Б';
+        const k = 1024;
+        const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
+        const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k));
+        return parseFloat((Math.abs(bytes) / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-
-    playbackRateSelect.addEventListener('change', (e) => {
-        audioPlayer.playbackRate = parseFloat(e.target.value);
-    });
 
     audioInput.addEventListener('change', async () => {
         const files = Array.from(audioInput.files);
-        if (files.length === 0) return;
-
         for (const file of files) {
-            console.log(`Проверка файла: ${file.name}`);
-            
-            const isValid = await isValidAudio(file);
-
-            if (!isValid) {
-                alert(`Файл "${file.name}" поврежден или не является поддерживаемым аудио.`);
-                continue;
-            }
-
             const streamer = new AudioStreamer(WS_URL, SESSION_ID, file);
             fileStreams.push(streamer);
-            
             streamer.onStatusChange = () => renderFileList();
             streamer.start(); 
         }
-
         audioInput.value = '';
         renderFileList();
     });
@@ -72,8 +45,29 @@ document.addEventListener('DOMContentLoaded', () => {
             statusSpan.className = `status-badge badge-${streamer.status}`;
             statusSpan.textContent = getStatusText(streamer.status);
 
+            const sizeDiffSpan = document.createElement('span');
+            sizeDiffSpan.className = 'size-info';
+            
+            if (streamer.status === 'finished') {
+                const diff = streamer.originalSize - streamer.processedSize;
+                const percent = ((Math.abs(diff) / streamer.originalSize) * 100).toFixed(1);
+                
+                if (diff > 0) {
+                    sizeDiffSpan.textContent = `Сэкономлено: ${formatBytes(diff)} (${percent}%)`;
+                    sizeDiffSpan.style.color = 'rgb(22, 101, 52)';
+                } else if (diff < 0) {
+                    sizeDiffSpan.textContent = `Размер вырос на: ${formatBytes(Math.abs(diff))}`;
+                    sizeDiffSpan.style.color = 'rgb(153, 27, 27)';
+                } else {
+                    sizeDiffSpan.textContent = `Размер не изменился`;
+                }
+            } else {
+                sizeDiffSpan.textContent = `Исходный: ${formatBytes(streamer.originalSize)}`;
+            }
+
             infoDiv.appendChild(nameSpan);
             infoDiv.appendChild(statusSpan);
+            infoDiv.appendChild(sizeDiffSpan);
 
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'file-actions';
@@ -81,21 +75,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const playBtn = document.createElement('button');
             playBtn.className = 'btn-play';
             playBtn.textContent = 'Слушать';
-            playBtn.onclick = () => {
-                streamer.attachToPlayer(audioPlayer);
-                audioPlayer.playbackRate = parseFloat(playbackRateSelect.value);
-            };
+            playBtn.onclick = () => streamer.attachToPlayer(audioPlayer);
 
             const downloadBtn = document.createElement('button');
             downloadBtn.className = 'btn-download';
             downloadBtn.textContent = 'Скачать';
             downloadBtn.disabled = streamer.status !== 'finished';
-            
             if (streamer.status === 'finished') {
                 downloadBtn.onclick = () => {
                     const a = document.createElement('a');
                     a.href = streamer.blobUrl;
-                    a.download = `processed_${streamer.file.name}`;
+                    a.download = `ready_${streamer.file.name}`;
                     a.click();
                 };
             }
@@ -109,12 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getStatusText(status) {
-        const map = {
-            'waiting': 'Ожидание',
-            'active': 'Обработка',
-            'finished': 'Готово',
-            'error': 'Ошибка'
-        };
+        const map = {'waiting': 'Ожидание', 'active': 'В работе', 'finished': 'Готово', 'error': 'Ошибка'};
         return map[status] || status;
     }
 });

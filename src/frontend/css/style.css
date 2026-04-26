@@ -1,16 +1,6 @@
-:root {
-    --primary-color: rgb(153, 153, 153);
-    --primary-hover: rgb(128, 128, 128);
-    --bg-color: rgb(243, 244, 246);
-    --card-bg: rgb(255, 255, 255);
-    --text-main: rgb(31, 41, 55);
-    --text-muted: rgb(107, 114, 128);
-    --border-color: rgb(209, 213, 219);
-}
-
 body {
-    background-color: var(--bg-color);
-    color: var(--text-main);
+    background-color: rgb(243, 244, 246);
+    color: rgb(31, 41, 55);
     margin: 0;
     display: flex;
     justify-content: center;
@@ -20,16 +10,12 @@ body {
 
 .app-container {
     padding: 2rem;
-    width: 100%;
-    max-width: 450px;
+    width: 90%;
+    max-width: 500px;
     border-radius: 12px;
-}
-
-
-.subtitle { 
-    color: var(--text-muted); 
-    font-size: 0.85rem; 
-    margin-bottom: 2rem;
+    background-color: rgb(255, 255, 255);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
 }
 
 .controls {
@@ -46,12 +32,12 @@ body {
 
 .file-label, label {
     font-size: 0.9rem;
-    color: var(--text-muted);
+    color: rgb(107, 114, 128);
 }
 
 audio {
     width: 100%;
-    height: 35px;
+    height: 40px;
 }
 
 .speed-control {
@@ -62,9 +48,10 @@ audio {
 }
 
 select {
-    border: 1px solid var(--border-color);
+    border: 1px solid rgb(209, 213, 219);
     border-radius: 4px;
-    padding: 2px;
+    padding: 4px;
+    background-color: rgb(255, 255, 255);
 }
 
 .file-list {
@@ -72,59 +59,66 @@ select {
     padding: 0;
     margin: 0;
     border-top: 1px solid rgb(238, 238, 238);
-    padding-top: 1rem;
 }
 
 .file-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.6rem 0;
+    align-items: flex-start;
+    padding: 1rem 0;
     border-bottom: 1px solid rgb(249, 249, 249);
+    gap: 10px;
 }
 
 .file-info {
     display: flex;
     flex-direction: column;
+    gap: 4px;
+    flex: 1;           
+    min-width: 0;      
 }
 
 .file-name {
     font-size: 0.9rem;
-    font-weight: 500;
-    max-width: 180px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-weight: 600;
+    color: rgb(31, 41, 55);
+    word-break: break-all; 
 }
 
 .status-badge {
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    font-weight: bold;
 }
 
-.badge-active { color: rgb(22, 101, 52); font-weight: bold; }
-.badge-finished { color: var(--primary-color); }
-.badge-error { color: rgb(103, 22, 22); }
+.badge-active { color: rgb(22, 101, 52); }
+.badge-finished { color: rgb(153, 153, 153); }
+.badge-error { color: rgb(153, 27, 27); }
+
+.size-info {
+    font-size: 0.75rem;
+    color: rgb(107, 114, 128);
+}
 
 .file-actions {
     display: flex;
-    gap: 8px;
+    gap: 5px;
+    flex-shrink: 0; 
 }
 
 button {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: rgb(153, 153, 153);
+    color: rgb(255, 255, 255);
     border: none;
-    padding: 0.5rem 0.7rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 6px;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     cursor: pointer;
-    transition: background 0.2s;
+    white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
-    background-color: var(--primary-hover);
+    background-color: rgb(128, 128, 128);
 }
 
 button:disabled {
@@ -135,6 +129,6 @@ button:disabled {
 
 .btn-play {
     background-color: rgb(243, 244, 246);
-    color: var(--text-main);
-    border: 1px solid var(--border-color);
+    color: rgb(31, 41, 55);
+    border: 1px solid rgb(209, 213, 219);
 }
