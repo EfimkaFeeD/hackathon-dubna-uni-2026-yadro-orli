@@ -1,4 +1,4 @@
-#include "enumsAndStructs.h"
+#include "enums_and_structs.h"
 
 std::string typeToString(dbTypes type) {
     switch (type) {
@@ -28,7 +28,7 @@ std::string constraintToString(constraint cons) {
         case constraint::NOT_NULL: return "NOT NULL";
         case constraint::UNIQUE: return "UNIQUE";
         case constraint::AUTOINCREMENT: return "AUTOINCREMENT";
-        case constraint::FOREIGN_KEY: return "REFERENCE ";
+        case constraint::FOREIGN_KEY: return "REFERENCE";
         default: return "NONE";
     }
 }

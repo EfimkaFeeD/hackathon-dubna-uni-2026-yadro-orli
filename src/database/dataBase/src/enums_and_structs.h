@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 #include <optional>
-
 enum class dbTypes {
     INTEGER,
     REAL,

@@ -42,7 +42,20 @@ void readerJSON::read(const std::string &fileNameOrPath) {
             col.maxValue = getOptional<int>(colJSON, "maxValue");
             col.minLength = getOptional<int>(colJSON, "minLength");
             col.maxLength = getOptional<int>(colJSON, "maxLength");
-            col.allowedValues = colJSON["allowedValues"];
+            if (colJSON.contains("allowedValues")) {
+                const auto& allowedJson = colJSON["allowedValues"];
+                if (allowedJson.is_array()) {
+                    for (const auto& val : allowedJson) {
+                        if (val.is_string()) {
+                            col.allowedValues.emplace_back(val.get<std::string>());
+                        } else if (val.is_number()) {
+                            col.allowedValues.emplace_back(std::to_string(val.get<int>()));
+                        } else if (val.is_null()) {
+                            col.allowedValues.emplace_back("null");
+                        }
+                    }
+                }
+            }
             tbl.columns.push_back(col);
         }
         tables.push_back(tbl);

@@ -3,7 +3,7 @@
 
 #include <nlohmann/json.hpp>
 #include <fstream>
-#include "enumsAndStructs.h"
+#include "enums_and_structs.h"
 #include <iostream>
 
 class readerJSON {

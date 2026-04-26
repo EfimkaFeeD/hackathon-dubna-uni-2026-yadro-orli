@@ -1,7 +1,7 @@
 #ifndef BD_VALIDATOR_H
 #define BD_VALIDATOR_H
 
-#include "enumsAndStructs.h"
+#include "enums_and_structs.h"
 #include <string>
 #include <vector>
 #include <regex>
