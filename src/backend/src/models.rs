@@ -1,6 +1,28 @@
-use serde::{Deserialize, Serialize};
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ChunkType {
+    Voice = 0,
+    Silence = 1,
+    WordStart = 2,
+    SentenceStart = 3,
+    ParagraphStart = 4,
+    Unknown = 255,
+}
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+impl From<u8> for ChunkType {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => ChunkType::Voice,
+            1 => ChunkType::Silence,
+            2 => ChunkType::WordStart,
+            3 => ChunkType::SentenceStart,
+            4 => ChunkType::ParagraphStart,
+            _ => ChunkType::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct AudioSpec {
     pub sample_rate: u32,
     pub channels: u16,
@@ -19,37 +41,9 @@ impl Default for AudioSpec {
     }
 }
 
+// ДОБАВЛЯЕМ ЭТОТ БЛОК:
 impl AudioSpec {
     pub fn is_mono(&self) -> bool {
         self.channels == 1
-    }
-
-    pub fn bytes_per_sample(&self) -> usize {
-        (self.bits_per_sample as usize) / 8
-    }
-
-    pub fn bytes_per_second(&self) -> usize {
-        self.sample_rate as usize * self.channels as usize * self.bytes_per_sample()
-    }
-
-    pub fn chunk_size_for_ms(&self, ms: u32) -> usize {
-        (self.bytes_per_second() as f64 * (ms as f64 / 1000.0)) as usize
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum ChunkType {
-    Silence = 0,
-    Voice = 1,
-    Unknown = 255,
-}
-
-impl From<u8> for ChunkType {
-    fn from(val: u8) -> Self {
-        match val {
-            0 => ChunkType::Silence,
-            1 => ChunkType::Voice,
-            _ => ChunkType::Unknown,
-        }
     }
 }

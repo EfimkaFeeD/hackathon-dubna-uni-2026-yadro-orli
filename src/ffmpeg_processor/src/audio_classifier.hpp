@@ -7,7 +7,7 @@
 #include "consts.h"
 
 class AudioClassifier {
- public:
+public:
   enum Tag : int {
     kVoice          = 0,
     kSilence        = 1,
@@ -23,9 +23,10 @@ class AudioClassifier {
   const std::deque<Tag>& getTagBuffer() const {
     return history_;
   }
- private:
+private:
   std::deque<Tag> history_;
   size_t maxFrames_;
+  int silenceFramesCounter_ = 100;
 };
 
-#endif // PODCAST_SILENCE_REMOVER_SRC_AUDIO_CLASSIFIER_HPP
+#endif

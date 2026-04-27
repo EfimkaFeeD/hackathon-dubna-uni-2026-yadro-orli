@@ -4,42 +4,42 @@ class AudioStreamer {
         this.sessionId = sessionId;
         this.file = file;
         this.id = Math.random().toString(36).substring(2, 9);
-        
+
         this.socket = null;
         this.collectedChunks = [];
         this.mediaSource = null;
         this.sourceBuffer = null;
         this.queue = [];
-        
+
         this.sampleRate = 44100;
         this.channels = 1;
         this.bitsPerSample = 16;
-        
+
         this.currentExt = 'wav';
-        this.useMSE = false; 
+        this.useMSE = false;
         this.audioElement = null;
         this.status = 'waiting';
         this.blobUrl = null;
         this.onStatusChange = null;
 
-        this.originalDuration = 0; 
+        this.originalDuration = 0;
         this.processedDuration = 0;
     }
 
     start() {
         this._reset();
         this._updateStatus('active');
-        
+
         this.socket = new WebSocket(this.wsUrl);
         this.socket.binaryType = 'arraybuffer';
 
         this.socket.onopen = () => {
             console.log("WebSocket opened, sending init...");
-            this.socket.send(JSON.stringify({ 
-                type: 'init',  
+            this.socket.send(JSON.stringify({
+                type: 'init',
                 sessionId: this.sessionId,
                 fileId: this.id,
-                fileName: this.file.name 
+                fileName: this.file.name
             }));
             this._streamUpload(this.file);
         };
@@ -79,7 +79,7 @@ class AudioStreamer {
 
     attachToPlayer(audioElement) {
         this.audioElement = audioElement;
-        
+
         if (this.status === 'finished' && this.blobUrl && this.blobUrl !== 'null') {
             console.log("Playing finished file from blob:", this.blobUrl);
             audioElement.src = this.blobUrl;
@@ -101,24 +101,36 @@ class AudioStreamer {
     }
 
     async _streamUpload(file) {
-        const CHUNK_SIZE = 32768; 
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const float32Data = audioBuffer.getChannelData(0);
+
+        const int16Data = new Int16Array(float32Data.length);
+        for (let i = 0; i < float32Data.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32Data[i]));
+            int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const CHUNK_SIZE = 65536;
         let offset = 0;
-        while (offset < file.size) {
-            const chunk = file.slice(offset, offset + CHUNK_SIZE);
-            const buffer = await chunk.arrayBuffer();
-            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(buffer);
-            } else {
-                console.warn("WebSocket not open, stopping upload");
-                break;
+        const buffer = int16Data.buffer;
+
+        while (offset < buffer.byteLength) {
+            // Ускорение: если буфер сокета не переполнен, шлем без задержки
+            if (this.socket.bufferedAmount > 2 * 1024 * 1024) { // 2MB лимит
+                await new Promise(r => setTimeout(r, 10));
+                continue;
             }
+
+            const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+            this.socket.send(chunk);
             offset += CHUNK_SIZE;
-            await new Promise(r => setTimeout(r, 5));
+            if (offset % (CHUNK_SIZE * 4) === 0) {
+                await new Promise(r => setTimeout(r, 0));
+            }
         }
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ type: 'end' }));
-            console.log("Sent end message");
-        }
+        this.socket.send(JSON.stringify({ type: 'end' }));
     }
 
     _createWavBlob() {
@@ -127,19 +139,19 @@ class AudioStreamer {
         for (const chunk of this.collectedChunks) {
             totalSamples += chunk.byteLength / bytesPerSample;
         }
-        
+
         const dataSize = totalSamples * bytesPerSample;
         const fileSize = 36 + dataSize;
         const byteRate = this.sampleRate * this.channels * bytesPerSample;
         const blockAlign = this.channels * bytesPerSample;
-        
+
         const buffer = new ArrayBuffer(44 + dataSize);
         const view = new DataView(buffer);
-        
+
         this._writeString(view, 0, 'RIFF');
         view.setUint32(4, fileSize, true);
         this._writeString(view, 8, 'WAVE');
-        
+
         this._writeString(view, 12, 'fmt ');
         view.setUint32(16, 16, true);
         view.setUint16(20, 1, true);
@@ -148,11 +160,10 @@ class AudioStreamer {
         view.setUint32(28, byteRate, true);
         view.setUint16(32, blockAlign, true);
         view.setUint16(34, this.bitsPerSample, true);
-        
+
         this._writeString(view, 36, 'data');
         view.setUint32(40, dataSize, true);
-        
-        // Копируем PCM данные
+
         let offset = 44;
         for (const chunk of this.collectedChunks) {
             const chunkView = new Uint8Array(chunk);
@@ -161,7 +172,7 @@ class AudioStreamer {
             }
             offset += chunkView.length;
         }
-        
+
         return new Blob([buffer], { type: 'audio/wav' });
     }
 
@@ -179,9 +190,9 @@ class AudioStreamer {
         }
 
         console.log("Finalizing, chunks count:", this.collectedChunks.length);
-        
+
         const blob = this._createWavBlob();
-        
+
         if (this.blobUrl && this.blobUrl !== 'null') {
             URL.revokeObjectURL(this.blobUrl);
         }
@@ -193,7 +204,7 @@ class AudioStreamer {
         const onReady = () => {
             this.blobUrl = URL.createObjectURL(blob);
             console.log("Blob URL created:", this.blobUrl);
-            
+
             if (this.audioElement && this.blobUrl && this.blobUrl !== 'null') {
                 console.log("Setting audio src to blob URL");
                 this.audioElement.src = this.blobUrl;

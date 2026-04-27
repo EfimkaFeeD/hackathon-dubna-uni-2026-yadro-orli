@@ -30,11 +30,11 @@ struct FfmpegResult {
 };
 
 class FfmpegProcessor {
- public:
+public:
   explicit FfmpegProcessor(const AudioSpec& inputSpec, float marginDb = kDefaultMarginDb, int vadMode = kDefaultVADMode,
                            int noiseWindowMs = kNoiseWindowTargetMs);
   FfmpegResult process(uint32_t packet_num, const uint8_t* buffer, size_t buffer_len);
- private:
+private:
   int inputSampleRate_;
   int frameSamples_;
   AVSampleFormat inputFormat_;

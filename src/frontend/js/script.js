@@ -5,10 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const playbackRateSelect = document.getElementById('playbackRate');
 
     const WS_URL = "ws://localhost:8080/ws";
-    
+
     const SESSION_ID = "sess_" + Math.random().toString(36).substring(2, 15);
     console.log('ID сессии:', SESSION_ID);
-    
+
     const fileStreams = [];
 
     function formatTime(seconds) {
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise((resolve) => {
             const audio = new Audio();
             const url = URL.createObjectURL(file);
-            audio.preload = "metadata"; 
+            audio.preload = "metadata";
             audio.src = url;
 
             audio.onloadedmetadata = () => {
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const file of files) {
             const duration = await getAudioDuration(file);
-            
+
             if (duration === null) {
                 alert(`Файл "${file.name}" не поддерживается или поврежден.`);
                 continue;
@@ -56,11 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const streamer = new AudioStreamer(WS_URL, SESSION_ID, file);
             streamer.originalDuration = duration; // Сохраняем длительность
-            
+
             fileStreams.push(streamer);
-            
+
             streamer.onStatusChange = () => renderFileList();
-            streamer.start(); 
+            streamer.start();
         }
 
         audioInput.value = '';
@@ -69,26 +69,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderFileList() {
         fileListEl.innerHTML = '';
-        
+
         fileStreams.forEach(streamer => {
             const li = document.createElement('li');
             li.className = 'file-item';
 
             const infoDiv = document.createElement('div');
             infoDiv.className = 'file-info';
-            
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'file-name';
             nameSpan.textContent = streamer.file.name;
-            
+
             const statusSpan = document.createElement('span');
             statusSpan.className = `status-badge badge-${streamer.status}`;
             statusSpan.textContent = getStatusText(streamer.status);
 
-        
+
             const timeDiffSpan = document.createElement('span');
             timeDiffSpan.className = 'size-info';
-            
+
             if (streamer.status === 'finished') {
                 const diff = streamer.originalDuration - streamer.processedDuration;
                 if (diff > 0.5) {
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
             downloadBtn.className = 'btn-download';
             downloadBtn.textContent = 'Скачать';
             downloadBtn.disabled = streamer.status !== 'finished';
-            
+
             if (streamer.status === 'finished') {
                 downloadBtn.onclick = () => {
                     const a = document.createElement('a');

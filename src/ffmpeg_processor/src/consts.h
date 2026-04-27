@@ -4,31 +4,30 @@
 #include <cstdint>
 
 // AudioSlicer
-constexpr int kOutputSampleRate = 48000; // 48 kHz
-constexpr int kOutputFrameMs    = 10;
-constexpr int kOutputSamples    = (kOutputSampleRate * kOutputFrameMs) / 1000; // 480
-constexpr int kOutputBufferSize = kOutputSamples * sizeof(int16_t);
+constexpr int kOutputSampleRate = 48000;
+constexpr int kOutputFrameMs    = 20;
+constexpr int kOutputSamples    = (kOutputSampleRate * kOutputFrameMs) / 1000;
 
-// AudioNoiseLevel
-constexpr double kPercentileOfNoise = 0.10; // 10%
+constexpr double kPercentileOfNoise = 0.05;
 constexpr int kNoiseWindowTargetMs  = 10000;
 
-// AudioSimpleVoiceDetect
-constexpr float kDefaultMarginDb = 3.0F;
 
-// AudioVoiceActivityDetect
-constexpr int kDefaultVADMode = 1;
+constexpr float kDefaultMarginDb = 4.0F;
 
-// AudioSegmenter
-constexpr int kSegmenterBufferMs     = 30000;                               // 30 seconds
-constexpr int kSegmenterBufferFrames = kSegmenterBufferMs / kOutputFrameMs; // 3000
 
-constexpr int kWordStartMs      = 150;
-constexpr int kSentenceStartMs  = 300;
-constexpr int kParagraphStartMs = 500;
+constexpr int kDefaultVADMode = 3;
 
-constexpr int kGapWordStartFrames      = kWordStartMs / kOutputFrameMs;      // 15
-constexpr int kGapSentenceStartFrames  = kSentenceStartMs / kOutputFrameMs;  // 30
-constexpr int kGapParagraphStartFrames = kParagraphStartMs / kOutputFrameMs; // 50
 
-#endif // PODCAST_SILENCE_REMOVER_SRC_CONSTS_H
+constexpr int kSegmenterBufferMs     = 30000;
+constexpr int kSegmenterBufferFrames = kSegmenterBufferMs / kOutputFrameMs;
+constexpr int kHangoverFrames        = 8; // Защитный интервал (~160мс)
+
+constexpr int kWordStartMs      = 80;
+constexpr int kSentenceStartMs  = 400;
+constexpr int kParagraphStartMs = 800;
+
+constexpr int kGapWordStartFrames      = kWordStartMs / kOutputFrameMs;
+constexpr int kGapSentenceStartFrames  = kSentenceStartMs / kOutputFrameMs;
+constexpr int kGapParagraphStartFrames = kParagraphStartMs / kOutputFrameMs;
+
+#endif

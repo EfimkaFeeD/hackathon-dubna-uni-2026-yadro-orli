@@ -21,7 +21,7 @@ AudioVoiceActivityDetect::~AudioVoiceActivityDetect() {
 
 bool
 AudioVoiceActivityDetect::isVoice(const int16_t* frame, bool simpleVoice) const {
-  if ((frame == nullptr) || !simpleVoice) {
+  if (frame == nullptr) {
     return false;
   }
   int result = fvad_process(vad_, frame, kOutputSamples);
